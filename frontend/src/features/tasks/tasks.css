@@ -1,0 +1,22 @@
+.task-add .task-new-date { flex: 0 0 145px; border-left: 1px solid var(--line); padding-left: 12px; }
+.task-content { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.task-title { border: 0; padding: 5px 0; background: transparent; color: inherit; text-align: left; font: inherit; overflow-wrap: anywhere; cursor: text; }
+.completed .task-title { color: #a0aa96; text-decoration: line-through; }
+.task-content .input { width: 100%; padding: 7px 9px; }
+.task-row input:not([type="checkbox"]) { width: auto; height: auto; cursor: text; }
+.task-row .task-content .input { width: 100%; min-height: 36px; }
+.task-row .task-date { width: 140px; min-height: 34px; }
+.task-filters { flex-wrap: wrap; }
+.task-due-label { font-size: 10px; color: var(--muted); }
+.task-due-label.overdue { color: #a34c3b; }
+.task-date { border: 1px solid transparent; border-radius: 5px; padding: 5px; background: transparent; color: #78836f; font-size: 11px; }
+.task-date:hover, .task-date:focus { border-color: var(--line); background: #fafbf6; }
+.task-error { color: #a34c3b; font-size: 11px; }
+.add-error { flex-basis: 100%; padding-left: 30px; }
+.add-error .button { padding: 3px 8px; }
+.task-spinner { color: #879f6b; flex: 0 0 auto; }
+@media (max-width: 720px) {
+  .task-add .task-new-date { flex: 1 1 140px; border-left: 0; }
+  .task-row { flex-wrap: wrap; }
+  .task-date { margin-left: 31px; }
+}

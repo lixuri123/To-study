@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "launcher",
+  "description": "Only the bundled connection page can read and set the server address.",
+  "windows": ["main"],
+  "local": true,
+  "permissions": ["core:default"]
+}

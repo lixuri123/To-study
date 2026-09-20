@@ -1,0 +1,5 @@
+import type {Course,Meeting} from "./types";
+export function occurs(m:Meeting,week:number){return week>=m.start_week&&week<=m.end_week&&(m.parity==="all"||(m.parity==="odd"?week%2===1:week%2===0));}
+export function coursesForWeek(courses:Course[],week:number){return courses.flatMap(course=>course.meetings.filter(m=>occurs(m,week)).map(meeting=>({course,meeting})));}
+export function maxBrowsableWeek(total:number,courses:Course[]){return Math.max(total,...courses.flatMap(c=>c.meetings.map(m=>m.end_week)),1);}
+export function teachingWeek(start:string|null,total:number,now:Date):{week:number;position:"before"|"inside"|"after"}|null{if(!start)return null;const [y,m,d]=start.split("-").map(Number);const first=new Date(y,m-1,d);const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());const raw=Math.floor((today.getTime()-first.getTime())/86400000/7)+1;if(raw<1)return {week:1,position:"before"};if(raw>total)return {week:total,position:"after"};return {week:raw,position:"inside"};}

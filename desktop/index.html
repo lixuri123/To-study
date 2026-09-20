@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>青笺桌面版</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="card">
+      <div class="mark">青</div>
+      <p class="eyebrow">青笺桌面版</p>
+      <h1>连接你的工作空间</h1>
+      <p class="description">桌面版使用与你的网页版相同的账号和数据。</p>
+      <form id="connection-form">
+        <label for="server-url">服务地址</label>
+        <input id="server-url" name="server-url" type="url" spellcheck="false" autocomplete="url" placeholder="https://notes.example.com" required />
+        <p id="message" role="status" aria-live="polite"></p>
+        <button id="connect" type="submit">连接</button>
+      </form>
+      <p class="hint">本机联调可使用 http://localhost:端口；其他地址必须使用 HTTPS。</p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

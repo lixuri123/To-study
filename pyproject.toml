@@ -1,0 +1,23 @@
+[project]
+name = "to-study"
+version = "0.1.0"
+description = "Notes and tasks with a React client and FastAPI backend"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.34,<1",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.14,<2",
+    "psycopg[binary]>=3.2,<4",
+    "pwdlib[argon2]>=0.2,<1",
+    "mcp>=1.26,<2",
+    "httpx>=0.28,<1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "httpx>=0.28,<1", "ruff>=0.11,<1"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
