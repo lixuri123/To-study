@@ -12,6 +12,7 @@ node_modules/
 .pytest_cache/
 .pytest-affairs-*/
 .ruff_cache/
+.superpowers/sdd/
 data/
 .env
 *.tsbuildinfo
