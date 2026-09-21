@@ -7,10 +7,24 @@ from .tasks.models import Task
 from .affairs.models import Affair
 from .timetable.models import Course, TimetableSettings
 from .agent.models import Profile, Receipt
+from .goals.models import (
+    Goal,
+    GoalActivitySuggestion,
+    GoalBlock,
+    GoalCategory,
+    GoalChecklistItem,
+    GoalProgressEntry,
+)
 from .reminders.models import Delivery
 
 __all__ = [
     "Delivery",
+    "Goal",
+    "GoalActivitySuggestion",
+    "GoalBlock",
+    "GoalCategory",
+    "GoalChecklistItem",
+    "GoalProgressEntry",
     "Profile",
     "Receipt",
     "Course",

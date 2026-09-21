@@ -10,7 +10,21 @@ def test_migration_upgrade_downgrade(tmp_path):
     config.attributes["database_url"] = url
     command.upgrade(config, "head")
     engine = create_engine(url)
-    assert {"users", "sessions", "notes", "tasks", "auth_rate_limits", "timetable_courses", "timetable_settings"} <= set(
+    assert {
+        "users",
+        "sessions",
+        "notes",
+        "tasks",
+        "auth_rate_limits",
+        "timetable_courses",
+        "timetable_settings",
+        "goals",
+        "goal_blocks",
+        "goal_checklist_items",
+        "goal_categories",
+        "goal_activity_suggestions",
+        "goal_progress_entries",
+    } <= set(
         inspect(engine).get_table_names()
     )
     command.check(config)
@@ -18,6 +32,33 @@ def test_migration_upgrade_downgrade(tmp_path):
     assert set(inspect(engine).get_table_names()) == {"alembic_version"}
     command.upgrade(config, "head")
     assert "notes" in inspect(engine).get_table_names()
+    engine.dispose()
+
+
+def test_goal_tracking_migration_creates_normalized_tables(tmp_path):
+    config = Config("alembic.ini")
+    url = f"sqlite:///{tmp_path / 'goals.db'}"
+    config.attributes["database_url"] = url
+    command.upgrade(config, "head")
+    engine = create_engine(url)
+    inspector = inspect(engine)
+    expected = {
+        "goals",
+        "goal_blocks",
+        "goal_checklist_items",
+        "goal_categories",
+        "goal_activity_suggestions",
+        "goal_progress_entries",
+    }
+    assert expected <= set(inspector.get_table_names())
+    assert {"user_id", "title", "description", "archived_at"} <= {
+        column["name"] for column in inspector.get_columns("goals")
+    }
+    assert {"kind", "minimum_total", "minimum_distinct_categories"} <= {
+        column["name"] for column in inspector.get_columns("goal_blocks")
+    }
+    command.downgrade(config, "0008")
+    assert expected.isdisjoint(inspect(engine).get_table_names())
     engine.dispose()
 
 
