@@ -9,9 +9,16 @@ from .models import (
     GoalBlock,
     GoalCategory,
     GoalChecklistItem,
+    GoalProgressEntry,
 )
 from .rules import project_structure, summarize_blocks
-from .schemas import GoalPreviewOutput, GoalStructureInput, LifecycleInput
+from .schemas import (
+    ChecklistCompletionInput,
+    GoalPreviewOutput,
+    GoalStructureInput,
+    LifecycleInput,
+    ProgressInput,
+)
 from .templates import template_structure
 
 
@@ -124,6 +131,99 @@ def list_goals(db: Session, user_id: str):
 
 
 def goal_detail(db: Session, user_id: str, goal_id: str):
+    return detail(owned_goal(db, user_id, goal_id))
+
+
+def checklist_item_in_goal(goal: Goal, item_id: str) -> GoalChecklistItem:
+    for block in goal.blocks:
+        if block.kind == "checklist":
+            for item in block.checklist_items:
+                if item.id == item_id:
+                    return item
+    raise HTTPException(404, "清单项不存在")
+
+
+def entry_in_goal(goal: Goal, entry_id: str) -> tuple[GoalBlock, GoalProgressEntry]:
+    for block in goal.blocks:
+        for entry in block.entries:
+            if entry.id == entry_id:
+                return block, entry
+    raise HTTPException(404, "进展记录不存在")
+
+
+def quota_category(goal: Goal, category_id: str) -> tuple[GoalBlock, GoalCategory]:
+    for block in goal.blocks:
+        if block.kind == "quota":
+            for category in block.categories:
+                if category.id == category_id:
+                    return block, category
+    raise HTTPException(422, "统计分类不属于该目标的计数型条件")
+
+
+def set_checklist_completion(
+    db: Session,
+    user_id: str,
+    goal_id: str,
+    item_id: str,
+    data: ChecklistCompletionInput,
+):
+    goal = owned_goal(db, user_id, goal_id)
+    item = checklist_item_in_goal(goal, item_id)
+    item.completed_on = data.completed_on
+    goal.updated_at = now()
+    db.commit()
+    return detail(owned_goal(db, user_id, goal_id))
+
+
+def create_progress_entry(
+    db: Session, user_id: str, goal_id: str, data: ProgressInput
+):
+    goal = owned_goal(db, user_id, goal_id)
+    block, category = quota_category(goal, data.category_id)
+    db.add(
+        GoalProgressEntry(
+            block_id=block.id,
+            category_id=category.id,
+            title=data.title,
+            completed_on=data.completed_on,
+            amount=data.amount,
+        )
+    )
+    goal.updated_at = now()
+    db.commit()
+    return detail(owned_goal(db, user_id, goal_id))
+
+
+def update_progress_entry(
+    db: Session,
+    user_id: str,
+    goal_id: str,
+    entry_id: str,
+    data: ProgressInput,
+):
+    goal = owned_goal(db, user_id, goal_id)
+    block, entry = entry_in_goal(goal, entry_id)
+    category_block, category = quota_category(goal, data.category_id)
+    if category_block.id != block.id:
+        raise HTTPException(422, "统计分类不属于该进展记录的计数型条件")
+    entry.title = data.title
+    entry.completed_on = data.completed_on
+    entry.amount = data.amount
+    entry.category_id = category.id
+    entry.updated_at = now()
+    goal.updated_at = now()
+    db.commit()
+    return detail(owned_goal(db, user_id, goal_id))
+
+
+def delete_progress_entry(
+    db: Session, user_id: str, goal_id: str, entry_id: str
+):
+    goal = owned_goal(db, user_id, goal_id)
+    _, entry = entry_in_goal(goal, entry_id)
+    db.delete(entry)
+    goal.updated_at = now()
+    db.commit()
     return detail(owned_goal(db, user_id, goal_id))
 
 

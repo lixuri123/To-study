@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -281,3 +281,192 @@ def test_structure_save_rejects_existing_child_id_under_new_parent(client):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "目标内容不存在"
+
+
+def test_progress_entries_attain_template_and_delete_recalculates_summary(client):
+    headers = account(client)
+    today = datetime.now(UTC).astimezone().date()
+    goal = client.post(
+        "/api/goals/from-template/full-time-postgraduate-quality", headers=headers
+    ).json()
+    goal_id = goal["id"]
+    core, quality = goal["blocks"]
+
+    def create_entry(category_id, title):
+        response = client.post(
+            f"/api/goals/{goal_id}/entries",
+            headers=headers,
+            json={
+                "title": title,
+                "completed_on": str(today),
+                "category_id": category_id,
+                "amount": 1,
+            },
+        )
+        assert response.status_code == 200
+        return response.json()
+
+    for category in core["categories"]:
+        create_entry(category["id"], category["name"])
+    for index in range(4):
+        create_entry(core["categories"][0]["id"], f"核心补充 {index}")
+    for category in quality["categories"][:3]:
+        completed = create_entry(category["id"], category["name"])
+
+    assert completed["summary"]["attained"] is True
+    quality_entry_id = next(
+        entry["id"]
+        for entry in completed["entries"]
+        if entry["category_id"] == quality["categories"][2]["id"]
+    )
+    deleted = client.delete(
+        f"/api/goals/{goal_id}/entries/{quality_entry_id}",
+        headers=headers,
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["summary"]["attained"] is False
+    quality_rules = deleted.json()["summary"]["blocks"][1]["rules"]
+    assert next(rule for rule in quality_rules if rule["key"] == "total")["current"] == 2
+    assert next(rule for rule in quality_rules if rule["key"] == "distinct")["current"] == 2
+
+
+def test_checklist_completion_updates_summary_and_rejects_future_date(client):
+    headers = account(client)
+    today = datetime.now(UTC).astimezone().date()
+    goal = client.post("/api/goals", headers=headers, json=simple_goal()).json()
+    first, second = goal["blocks"][0]["checklist_items"]
+
+    completed = client.put(
+        f"/api/goals/{goal['id']}/checklist/{first['id']}",
+        headers=headers,
+        json={"completed_on": str(today)},
+    )
+    assert completed.status_code == 200
+    assert completed.json()["blocks"][0]["checklist_items"][0]["completed_on"] == str(today)
+    assert completed.json()["summary"]["attained"] is False
+    complete_all = client.put(
+        f"/api/goals/{goal['id']}/checklist/{second['id']}",
+        headers=headers,
+        json={"completed_on": str(today)},
+    )
+    assert complete_all.json()["summary"]["attained"] is True
+    uncompleted = client.put(
+        f"/api/goals/{goal['id']}/checklist/{first['id']}",
+        headers=headers,
+        json={"completed_on": None},
+    )
+    assert uncompleted.status_code == 200
+    assert uncompleted.json()["blocks"][0]["checklist_items"][0]["completed_on"] is None
+    assert uncompleted.json()["summary"]["attained"] is False
+    future = client.put(
+        f"/api/goals/{goal['id']}/checklist/{first['id']}",
+        headers=headers,
+        json={"completed_on": str(today + timedelta(days=1))},
+    )
+    assert future.status_code == 422
+
+
+def test_progress_entry_validates_parent_scope_and_can_change_category_in_block(client):
+    alice = account(client)
+    bob = account(client, "bobby")
+    today = datetime.now(UTC).astimezone().date()
+    data = structured_goal()
+    data["blocks"].append({
+        "kind": "quota",
+        "title": "另一项活动",
+        "unit_label": "次",
+        "minimum_total": 1,
+        "position": 2,
+        "checklist_items": [],
+        "categories": [{
+            "name": "另一分类",
+            "minimum_amount": 1,
+            "is_required": False,
+            "position": 0,
+            "suggestions": [],
+        }],
+    })
+    alice_goal = client.post("/api/goals", headers=alice, json=data).json()
+    bob_goal = client.post("/api/goals", headers=bob, json=structured_goal()).json()
+    quota, other_quota = alice_goal["blocks"][1:]
+    first_category, second_category = quota["categories"]
+    other_category = other_quota["categories"][0]
+    item_id = alice_goal["blocks"][0]["checklist_items"][0]["id"]
+
+    foreign_item = client.put(
+        f"/api/goals/{bob_goal['id']}/checklist/{item_id}",
+        headers=bob,
+        json={"completed_on": str(today)},
+    )
+    assert foreign_item.status_code == 404
+    created = client.post(
+        f"/api/goals/{alice_goal['id']}/entries",
+        headers=alice,
+        json={
+            "title": "初始活动",
+            "completed_on": str(today),
+            "category_id": first_category["id"],
+            "amount": 1,
+        },
+    )
+    assert created.status_code == 200
+    entry_id = created.json()["entries"][0]["id"]
+    foreign_entry = client.put(
+        f"/api/goals/{bob_goal['id']}/entries/{entry_id}",
+        headers=bob,
+        json={
+            "title": "不应修改",
+            "completed_on": str(today),
+            "category_id": first_category["id"],
+            "amount": 1,
+        },
+    )
+    assert foreign_entry.status_code == 404
+    wrong_block = client.put(
+        f"/api/goals/{alice_goal['id']}/entries/{entry_id}",
+        headers=alice,
+        json={
+            "title": "跨条件",
+            "completed_on": str(today),
+            "category_id": other_category["id"],
+            "amount": 1,
+        },
+    )
+    assert wrong_block.status_code == 422
+    changed = client.put(
+        f"/api/goals/{alice_goal['id']}/entries/{entry_id}",
+        headers=alice,
+        json={
+            "title": "修改活动",
+            "completed_on": str(today),
+            "category_id": second_category["id"],
+            "amount": 2,
+        },
+    )
+    assert changed.status_code == 200
+    entry = changed.json()["entries"][0]
+    assert entry["title"] == "修改活动"
+    assert entry["category_id"] == second_category["id"]
+    assert entry["amount"] == 2
+    invalid_amount = client.post(
+        f"/api/goals/{alice_goal['id']}/entries",
+        headers=alice,
+        json={
+            "title": "零数量",
+            "completed_on": str(today),
+            "category_id": first_category["id"],
+            "amount": 0,
+        },
+    )
+    assert invalid_amount.status_code == 422
+    future_progress = client.post(
+        f"/api/goals/{alice_goal['id']}/entries",
+        headers=alice,
+        json={
+            "title": "未来活动",
+            "completed_on": str(today + timedelta(days=1)),
+            "category_id": first_category["id"],
+            "amount": 1,
+        },
+    )
+    assert future_progress.status_code == 422
