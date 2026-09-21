@@ -20,6 +20,22 @@ it("opens at the current teaching week after loading semester settings", async (
   await waitFor(() => expect(screen.getByRole("combobox", {name: "教学周"})).toHaveValue("4"));
 });
 
+it("keeps a week selected while semester settings are loading", async () => {
+  let resolveCourses!: (value: []) => void;
+  let resolveSettings!: (value: typeof settings) => void;
+  request.mockImplementation((path: string) => path.endsWith("courses")
+    ? new Promise<[]>((resolve) => { resolveCourses = resolve; })
+    : new Promise<typeof settings>((resolve) => { resolveSettings = resolve; }));
+  const user = userEvent.setup();
+  render(<TimetablePanel active onDraftChange={() => {}} />);
+  const selector = screen.getByRole("combobox", {name: "教学周"});
+  await user.selectOptions(selector, "2");
+  resolveCourses([]);
+  resolveSettings(settings);
+  expect(await screen.findByText(/还没有课程/)).toBeVisible();
+  expect(selector).toHaveValue("2");
+});
+
 it("does not replace a course draft through another editor button", async () => {
   const user = userEvent.setup();
   render(<TimetablePanel active onDraftChange={() => {}} />);
