@@ -1,4 +1,55 @@
+from types import SimpleNamespace
+
 from .schemas import BlockSummaryOutput, GoalSummaryOutput, RuleOutput
+
+
+def project_structure(data, existing_entries, completed_items):
+    blocks = []
+    for block_data in sorted(data.blocks, key=lambda item: item.position):
+        block_id = block_data.id or f"preview-block-{block_data.position}"
+        block = SimpleNamespace(
+            id=block_id,
+            kind=block_data.kind,
+            title=block_data.title,
+            unit_label=block_data.unit_label,
+            minimum_total=block_data.minimum_total,
+            minimum_distinct_categories=block_data.minimum_distinct_categories,
+            checklist_items=[],
+            categories=[],
+            entries=[],
+        )
+        if block_data.kind == "checklist":
+            block.checklist_items = [
+                SimpleNamespace(
+                    id=item.id or f"preview-item-{item.position}",
+                    title=item.title,
+                    completed_on=completed_items.get(item.id),
+                )
+                for item in sorted(
+                    block_data.checklist_items, key=lambda value: value.position
+                )
+            ]
+        else:
+            block.categories = [
+                SimpleNamespace(
+                    id=category.id or f"preview-category-{category.position}",
+                    name=category.name,
+                    minimum_amount=category.minimum_amount,
+                    is_required=category.is_required,
+                )
+                for category in sorted(
+                    block_data.categories, key=lambda value: value.position
+                )
+            ]
+            category_ids = {category.id for category in block.categories}
+            block.entries = [
+                entry
+                for entry in existing_entries
+                if entry.block_id == block_data.id
+                and entry.category_id in category_ids
+            ]
+        blocks.append(block)
+    return blocks
 
 
 def summarize_blocks(blocks) -> GoalSummaryOutput:

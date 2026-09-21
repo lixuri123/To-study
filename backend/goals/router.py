@@ -53,6 +53,26 @@ def goal_detail(
     return service.goal_detail(db, user.id, goal_id)
 
 
+@router.post("/{goal_id}/structure/preview")
+def preview_structure(
+    goal_id: str,
+    data: GoalStructureInput,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(db_session)],
+):
+    return service.preview_structure(db, user.id, goal_id, data)
+
+
+@router.put("/{goal_id}/structure")
+def save_structure(
+    goal_id: str,
+    data: GoalStructureInput,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(db_session)],
+):
+    return service.save_structure(db, user.id, goal_id, data)
+
+
 @router.patch("/{goal_id}/lifecycle")
 def set_lifecycle(
     goal_id: str,

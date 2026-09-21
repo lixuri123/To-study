@@ -1,6 +1,10 @@
+from datetime import date
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
+from backend.goals.models import GoalChecklistItem, GoalProgressEntry
 from backend.main import create_app
 
 
@@ -42,6 +46,59 @@ def simple_goal():
             ],
             "categories": [],
         }],
+    }
+
+
+def structured_goal():
+    return {
+        "title": "综合目标",
+        "description": "记录各项完成情况",
+        "blocks": [
+            {
+                "kind": "checklist",
+                "title": "资料准备",
+                "unit_label": "项",
+                "position": 0,
+                "checklist_items": [
+                    {"title": "提交材料", "position": 0},
+                    {"title": "领取证书", "position": 1},
+                ],
+                "categories": [],
+            },
+            {
+                "kind": "quota",
+                "title": "实践活动",
+                "unit_label": "次",
+                "minimum_total": 1,
+                "minimum_distinct_categories": None,
+                "position": 1,
+                "checklist_items": [],
+                "categories": [
+                    {
+                        "name": "志愿服务",
+                        "minimum_amount": 1,
+                        "is_required": False,
+                        "position": 0,
+                        "suggestions": [{"title": "社区服务", "position": 0}],
+                    },
+                    {
+                        "name": "社会实践",
+                        "minimum_amount": 1,
+                        "is_required": False,
+                        "position": 1,
+                        "suggestions": [],
+                    },
+                ],
+            },
+        ],
+    }
+
+
+def structure_from_goal(goal):
+    return {
+        "title": goal["title"],
+        "description": goal["description"],
+        "blocks": goal["blocks"],
     }
 
 
@@ -103,3 +160,124 @@ def test_full_time_template_is_copied_and_rule_complete(client):
     assert "“志愿北京”平台累计志愿服务满 10 小时" in [
         suggestion["title"] for suggestion in volunteer["suggestions"]
     ]
+
+
+def test_structure_save_preserves_owned_ids_and_updates_names(client):
+    headers = account(client)
+    goal = client.post("/api/goals", headers=headers, json=structured_goal()).json()
+    payload = structure_from_goal(goal)
+    payload["title"] = "已更新综合目标"
+    payload["blocks"][1]["categories"][0]["name"] = "公益服务"
+
+    response = client.put(f"/api/goals/{goal['id']}/structure", headers=headers, json=payload)
+
+    assert response.status_code == 200
+    saved = response.json()
+    assert saved["id"] == goal["id"]
+    assert saved["blocks"][0]["id"] == goal["blocks"][0]["id"]
+    assert saved["blocks"][0]["checklist_items"][0]["id"] == goal["blocks"][0]["checklist_items"][0]["id"]
+    assert saved["blocks"][1]["categories"][0]["id"] == goal["blocks"][1]["categories"][0]["id"]
+    assert saved["blocks"][1]["categories"][0]["suggestions"][0]["id"] == goal["blocks"][1]["categories"][0]["suggestions"][0]["id"]
+    assert saved["title"] == "已更新综合目标"
+    assert saved["blocks"][1]["categories"][0]["name"] == "公益服务"
+
+
+def test_structure_preview_projects_stricter_rules_without_writing(client):
+    headers = account(client)
+    data = structured_goal()
+    data["blocks"] = [data["blocks"][1]]
+    goal = client.post("/api/goals", headers=headers, json=data).json()
+    quota = goal["blocks"][0]
+    category = quota["categories"][0]
+    with Session(client.app.state.engine) as db:
+        db.add(GoalProgressEntry(
+            block_id=quota["id"],
+            category_id=category["id"],
+            title="已有活动",
+            completed_on=date(2026, 9, 20),
+            amount=1,
+        ))
+        db.commit()
+    goal = client.get(f"/api/goals/{goal['id']}", headers=headers).json()
+    stricter = structure_from_goal(goal)
+    stricter["blocks"][0]["minimum_total"] = 2
+
+    preview = client.post(
+        f"/api/goals/{goal['id']}/structure/preview",
+        headers=headers,
+        json=stricter,
+    )
+
+    assert preview.status_code == 200
+    assert preview.json()["current_summary"] == goal["summary"]
+    assert preview.json()["current_summary"]["attained"] is True
+    assert preview.json()["proposed_summary"]["attained"] is False
+    assert client.get(f"/api/goals/{goal['id']}", headers=headers).json()["title"] == goal["title"]
+
+
+def test_structure_save_rejects_omitting_completed_checklist_item(client):
+    headers = account(client)
+    goal = client.post("/api/goals", headers=headers, json=structured_goal()).json()
+    item_id = goal["blocks"][0]["checklist_items"][0]["id"]
+    with Session(client.app.state.engine) as db:
+        item = db.get(GoalChecklistItem, item_id)
+        item.completed_on = date(2026, 9, 20)
+        db.commit()
+    payload = structure_from_goal(goal)
+    payload["blocks"][0]["checklist_items"] = payload["blocks"][0]["checklist_items"][1:]
+
+    response = client.put(f"/api/goals/{goal['id']}/structure", headers=headers, json=payload)
+
+    assert response.status_code == 409
+    assert "提交材料" in response.json()["detail"]
+
+
+def test_structure_save_rejects_omitting_category_with_entries(client):
+    headers = account(client)
+    goal = client.post("/api/goals", headers=headers, json=structured_goal()).json()
+    quota = goal["blocks"][1]
+    category = quota["categories"][0]
+    with Session(client.app.state.engine) as db:
+        db.add(GoalProgressEntry(
+            block_id=quota["id"],
+            category_id=category["id"],
+            title="已有活动",
+            completed_on=date(2026, 9, 20),
+            amount=1,
+        ))
+        db.commit()
+    payload = structure_from_goal(goal)
+    payload["blocks"][1]["categories"] = payload["blocks"][1]["categories"][1:]
+
+    response = client.put(f"/api/goals/{goal['id']}/structure", headers=headers, json=payload)
+
+    assert response.status_code == 409
+    assert "志愿服务" in response.json()["detail"]
+
+
+def test_structure_save_rejects_cross_account_block_id_without_writes(client):
+    alice = account(client)
+    bob = account(client, "bobby")
+    alice_goal = client.post("/api/goals", headers=alice, json=structured_goal()).json()
+    bob_goal = client.post("/api/goals", headers=bob, json=structured_goal()).json()
+    payload = structure_from_goal(bob_goal)
+    payload["blocks"][0]["id"] = alice_goal["blocks"][0]["id"]
+
+    response = client.put(f"/api/goals/{bob_goal['id']}/structure", headers=bob, json=payload)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "目标内容不存在"
+    assert client.get(f"/api/goals/{alice_goal['id']}", headers=alice).json()["title"] == alice_goal["title"]
+    assert client.get(f"/api/goals/{bob_goal['id']}", headers=bob).json()["title"] == bob_goal["title"]
+
+
+def test_structure_save_rejects_existing_child_id_under_new_parent(client):
+    headers = account(client)
+    goal = client.post("/api/goals", headers=headers, json=structured_goal()).json()
+    payload = structure_from_goal(goal)
+    payload["blocks"][0]["id"] = None
+
+    response = client.put(f"/api/goals/{goal['id']}/structure", headers=headers, json=payload)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "目标内容不存在"

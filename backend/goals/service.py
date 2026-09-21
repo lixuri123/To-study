@@ -10,8 +10,8 @@ from .models import (
     GoalCategory,
     GoalChecklistItem,
 )
-from .rules import summarize_blocks
-from .schemas import GoalStructureInput, LifecycleInput
+from .rules import project_structure, summarize_blocks
+from .schemas import GoalPreviewOutput, GoalStructureInput, LifecycleInput
 from .templates import template_structure
 
 
@@ -165,6 +165,209 @@ def create_graph(db: Session, user_id: str, data: GoalStructureInput):
 
 def create_goal(db: Session, user_id: str, data: GoalStructureInput):
     return detail(create_graph(db, user_id, data))
+
+
+def _content_not_found():
+    raise HTTPException(404, "目标内容不存在")
+
+
+def _validate_structure_ids(goal: Goal, data: GoalStructureInput):
+    block_by_id = {block.id: block for block in goal.blocks}
+    supplied_blocks = {}
+    for block_data in data.blocks:
+        if block_data.id is None:
+            if (
+                any(item.id is not None for item in block_data.checklist_items)
+                or any(category.id is not None for category in block_data.categories)
+                or any(
+                    suggestion.id is not None
+                    for category in block_data.categories
+                    for suggestion in category.suggestions
+                )
+            ):
+                _content_not_found()
+            continue
+        block = block_by_id.get(block_data.id)
+        if block is None:
+            _content_not_found()
+        supplied_blocks[block_data.id] = block
+        item_by_id = {item.id: item for item in block.checklist_items}
+        category_by_id = {category.id: category for category in block.categories}
+        for item_data in block_data.checklist_items:
+            if item_data.id is not None and item_data.id not in item_by_id:
+                _content_not_found()
+        for category_data in block_data.categories:
+            if category_data.id is None:
+                if any(suggestion.id is not None for suggestion in category_data.suggestions):
+                    _content_not_found()
+                continue
+            category = category_by_id.get(category_data.id)
+            if category is None:
+                _content_not_found()
+            suggestion_ids = {suggestion.id for suggestion in category.suggestions}
+            if any(
+                suggestion.id is not None and suggestion.id not in suggestion_ids
+                for suggestion in category_data.suggestions
+            ):
+                _content_not_found()
+    return block_by_id, supplied_blocks
+
+
+def _history_warnings(goal: Goal, data: GoalStructureInput):
+    supplied_by_id = {block.id: block for block in data.blocks if block.id is not None}
+    warnings = []
+    for block in goal.blocks:
+        block_data = supplied_by_id.get(block.id)
+        item_ids = (
+            {item.id for item in block_data.checklist_items if item.id is not None}
+            if block_data is not None
+            else set()
+        )
+        category_ids = (
+            {category.id for category in block_data.categories if category.id is not None}
+            if block_data is not None
+            else set()
+        )
+        for item in block.checklist_items:
+            if item.id not in item_ids and item.completed_on is not None:
+                warnings.append(f"已完成清单项“{item.title}”将被移除")
+        for category in block.categories:
+            if category.id not in category_ids and any(
+                entry.category_id == category.id for entry in block.entries
+            ):
+                warnings.append(f"分类“{category.name}”仍有完成记录")
+    return warnings
+
+
+def preview_structure(
+    db: Session, user_id: str, goal_id: str, data: GoalStructureInput
+):
+    goal = owned_goal(db, user_id, goal_id)
+    _validate_structure_ids(goal, data)
+    completed_items = {
+        item.id: item.completed_on
+        for block in goal.blocks
+        for item in block.checklist_items
+        if item.completed_on is not None
+    }
+    existing_entries = [entry for block in goal.blocks for entry in block.entries]
+    return GoalPreviewOutput(
+        current_summary=summarize_blocks(goal.blocks),
+        proposed_summary=summarize_blocks(
+            project_structure(data, existing_entries, completed_items)
+        ),
+        warnings=_history_warnings(goal, data),
+    )
+
+
+def _raise_if_history_would_be_removed(goal: Goal, data: GoalStructureInput):
+    warnings = _history_warnings(goal, data)
+    if warnings:
+        raise HTTPException(409, warnings[0].replace("将被移除", "不能删除").replace("仍有完成记录", "已有完成记录，不能删除"))
+
+
+def _sync_structure(goal: Goal, data: GoalStructureInput, db: Session):
+    block_by_id, _ = _validate_structure_ids(goal, data)
+    _raise_if_history_would_be_removed(goal, data)
+    submitted_block_ids = {block.id for block in data.blocks if block.id is not None}
+    ordered_blocks = []
+    for block_position, block_data in enumerate(
+        sorted(data.blocks, key=lambda block: block.position)
+    ):
+        block = block_by_id.get(block_data.id) if block_data.id else None
+        if block is None:
+            block = GoalBlock()
+            goal.blocks.append(block)
+        block.kind = block_data.kind
+        block.title = block_data.title
+        block.unit_label = block_data.unit_label
+        block.minimum_total = block_data.minimum_total
+        block.minimum_distinct_categories = block_data.minimum_distinct_categories
+        block.position = block_position
+        item_by_id = {item.id: item for item in block.checklist_items}
+        submitted_item_ids = {
+            item.id for item in block_data.checklist_items if item.id is not None
+        }
+        for item_position, item_data in enumerate(
+            sorted(block_data.checklist_items, key=lambda item: item.position)
+        ):
+            item = item_by_id.get(item_data.id) if item_data.id else None
+            if item is None:
+                item = GoalChecklistItem()
+                block.checklist_items.append(item)
+            item.title = item_data.title
+            item.position = item_position
+        for item in block.checklist_items:
+            if item.id in item_by_id and item.id not in submitted_item_ids:
+                db.delete(item)
+        category_by_id = {category.id: category for category in block.categories}
+        submitted_category_ids = {
+            category.id for category in block_data.categories if category.id is not None
+        }
+        for category_position, category_data in enumerate(
+            sorted(block_data.categories, key=lambda category: category.position)
+        ):
+            category = category_by_id.get(category_data.id) if category_data.id else None
+            if category is None:
+                category = GoalCategory()
+                block.categories.append(category)
+            category.name = category_data.name
+            category.minimum_amount = category_data.minimum_amount
+            category.is_required = category_data.is_required
+            category.position = category_position
+            suggestion_by_id = {
+                suggestion.id: suggestion for suggestion in category.suggestions
+            }
+            submitted_suggestion_ids = {
+                suggestion.id
+                for suggestion in category_data.suggestions
+                if suggestion.id is not None
+            }
+            for suggestion_position, suggestion_data in enumerate(
+                sorted(category_data.suggestions, key=lambda suggestion: suggestion.position)
+            ):
+                suggestion = (
+                    suggestion_by_id.get(suggestion_data.id)
+                    if suggestion_data.id
+                    else None
+                )
+                if suggestion is None:
+                    suggestion = GoalActivitySuggestion()
+                    category.suggestions.append(suggestion)
+                suggestion.title = suggestion_data.title
+                suggestion.position = suggestion_position
+            for suggestion in category.suggestions:
+                if (
+                    suggestion.id in suggestion_by_id
+                    and suggestion.id not in submitted_suggestion_ids
+                ):
+                    db.delete(suggestion)
+        for category in block.categories:
+            if category.id in category_by_id and category.id not in submitted_category_ids:
+                db.delete(category)
+        ordered_blocks.append(block)
+    for block in goal.blocks:
+        if block.id in block_by_id and block.id not in submitted_block_ids:
+            db.delete(block)
+    goal.blocks = ordered_blocks
+    goal.title = data.title
+    goal.description = data.description
+    goal.updated_at = now()
+
+
+def save_structure(
+    db: Session, user_id: str, goal_id: str, data: GoalStructureInput
+):
+    try:
+        goal = owned_goal(db, user_id, goal_id)
+        _sync_structure(goal, data, db)
+        db.flush()
+        summarize_blocks(goal.blocks)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return detail(owned_goal(db, user_id, goal_id))
 
 
 def set_lifecycle(
