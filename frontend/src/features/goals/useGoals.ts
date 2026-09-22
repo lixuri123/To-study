@@ -82,16 +82,19 @@ export function useGoals(active: boolean) {
   const selectGoal = useCallback(async (id: string) => run(async () => {
     const detail = await api<GoalDetail>(`/goals/${id}`);
     mergeDetail(detail);
+    return detail;
   }), [mergeDetail, run]);
 
   const createGoal = useCallback(async (draft: GoalDraft) => run(async () => {
     const detail = await api<GoalDetail>("/goals", "POST", draft);
     mergeDetail(detail);
+    return detail;
   }), [mergeDetail, run]);
 
   const createFromTemplate = useCallback(async (key: string) => run(async () => {
     const detail = await api<GoalDetail>(`/goals/from-template/${key}`, "POST");
     mergeDetail(detail);
+    return detail;
   }), [mergeDetail, run]);
 
   const withSelected = useCallback(<T,>(operation: (goalId: string) => Promise<T>) => {
@@ -102,6 +105,7 @@ export function useGoals(active: boolean) {
   const saveStructure = useCallback(async (draft: GoalDraft) => withSelected(async (goalId) => {
     const detail = await api<GoalDetail>(`/goals/${goalId}/structure`, "PUT", draft);
     mergeDetail(detail);
+    return detail;
   }), [mergeDetail, withSelected]);
 
   const previewStructure = useCallback((draft: GoalDraft) => withSelected(async (goalId) => (
@@ -111,26 +115,31 @@ export function useGoals(active: boolean) {
   const setArchived = useCallback(async (archived: boolean) => withSelected(async (goalId) => {
     const detail = await api<GoalDetail>(`/goals/${goalId}/lifecycle`, "PATCH", { archived });
     mergeDetail(detail);
+    return detail;
   }), [mergeDetail, withSelected]);
 
   const setChecklistCompletion = useCallback(async (itemId: string, completedOn: string | null) => withSelected(async (goalId) => {
     const detail = await api<GoalDetail>(`/goals/${goalId}/checklist/${itemId}`, "PUT", { completed_on: completedOn });
     mergeDetail(detail);
+    return detail;
   }), [mergeDetail, withSelected]);
 
   const createEntry = useCallback(async (input: GoalEntryInput) => withSelected(async (goalId) => {
     const detail = await api<GoalDetail>(`/goals/${goalId}/entries`, "POST", input);
     mergeDetail(detail);
+    return detail;
   }), [mergeDetail, withSelected]);
 
   const updateEntry = useCallback(async (entryId: string, input: GoalEntryInput) => withSelected(async (goalId) => {
     const detail = await api<GoalDetail>(`/goals/${goalId}/entries/${entryId}`, "PUT", input);
     mergeDetail(detail);
+    return detail;
   }), [mergeDetail, withSelected]);
 
   const deleteEntry = useCallback(async (entryId: string) => withSelected(async (goalId) => {
     const detail = await api<GoalDetail>(`/goals/${goalId}/entries/${entryId}`, "DELETE");
     mergeDetail(detail);
+    return detail;
   }), [mergeDetail, withSelected]);
 
   return {

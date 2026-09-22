@@ -111,3 +111,24 @@ it("keeps selected data and exposes retry after a failed mutation", async () => 
     summary: updatedDetail.summary,
   }]);
 });
+
+it("returns merged detail from successful detail-producing operations", async () => {
+  apiMock.mockResolvedValue(detail);
+  const { result } = renderHook(() => useGoals(false));
+  const draft = { title: "毕业目标", description: "完成论文", blocks: [] };
+  const input = { title: "提交初稿", completed_on: "2026-09-20", category_id: "c1", amount: 1 };
+  const results: Array<GoalDetail | undefined> = [];
+
+  await act(async () => { results.push(await result.current.selectGoal(card.id)); });
+  await act(async () => { results.push(await result.current.createGoal(draft)); });
+  await act(async () => { results.push(await result.current.createFromTemplate(template.key)); });
+  await act(async () => { results.push(await result.current.saveStructure(draft)); });
+  await act(async () => { results.push(await result.current.setArchived(true)); });
+  await act(async () => { results.push(await result.current.setChecklistCompletion("i1", input.completed_on)); });
+  await act(async () => { results.push(await result.current.createEntry(input)); });
+  await act(async () => { results.push(await result.current.updateEntry("e1", input)); });
+  await act(async () => { results.push(await result.current.deleteEntry("e1")); });
+
+  expect(results).toEqual(Array.from({ length: 9 }, () => detail));
+  expect(result.current.selected).toEqual(detail);
+});

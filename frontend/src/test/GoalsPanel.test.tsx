@@ -75,6 +75,30 @@ it("keeps attained and archived badges distinct in the goal list", async () => {
   expect(within(archivedRow).queryByText("已达成")).not.toBeInTheDocument();
 });
 
+it("opens the selected goal after a successful list selection", async () => {
+  const model = modelFor({ selected: null });
+  model.selectGoal = vi.fn().mockImplementation(async () => {
+    model.selected = detail;
+    return detail;
+  });
+  const user = userEvent.setup();
+  render(<GoalsPanel model={model} onDraftChange={vi.fn()} />);
+  await user.click(screen.getByText("研究生综合素质").closest("button")!);
+  expect(await screen.findByRole("heading", { name: "研究生综合素质" })).toBeVisible();
+});
+
+it("opens the template detail after successful template creation", async () => {
+  const model = modelFor({ goals: [], selected: null });
+  model.createFromTemplate = vi.fn().mockImplementation(async () => {
+    model.selected = detail;
+    return detail;
+  });
+  const user = userEvent.setup();
+  render(<GoalsPanel model={model} onDraftChange={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "从综合素质模板创建" }));
+  expect(await screen.findByRole("heading", { name: "研究生综合素质" })).toBeVisible();
+});
+
 it("shows rule totals without an overall percentage", () => {
   render(<GoalsPanel model={modelFor()} onDraftChange={vi.fn()} />);
   expect(screen.getByText("累计数量")).toBeVisible();
@@ -101,6 +125,34 @@ it("records a custom activity title after choosing block and category", async ()
   await user.type(screen.getByLabelText("活动名称"), "自定义工作坊");
   await user.click(screen.getByRole("button", { name: "记录进度" }));
   expect(model.createEntry).toHaveBeenCalledWith({ title: "自定义工作坊", completed_on: today, category_id: "seminar", amount: 1 });
+});
+
+it("clears only the title and resets the amount after recording progress", async () => {
+  const model = modelFor();
+  const user = userEvent.setup();
+  render(<GoalsPanel model={model} onDraftChange={vi.fn()} />);
+  await user.type(screen.getByLabelText("活动名称"), "自定义工作坊");
+  await user.click(screen.getByRole("button", { name: "高级字段" }));
+  await user.clear(screen.getByLabelText("数量"));
+  await user.type(screen.getByLabelText("数量"), "3");
+  await user.click(screen.getByRole("button", { name: "记录进度" }));
+  expect(screen.getByLabelText("活动名称")).toHaveValue("");
+  expect(screen.getByLabelText("数量")).toHaveValue(1);
+  expect(screen.getByLabelText("完成日期")).toHaveValue(today);
+  expect(screen.getByLabelText("记录区块")).toHaveValue("quota");
+  expect(screen.getByLabelText("记录分类")).toHaveValue("seminar");
+});
+
+it("exits entry edit mode after a successful update", async () => {
+  const model = modelFor({ updateEntry: vi.fn().mockResolvedValue(detail) });
+  const user = userEvent.setup();
+  render(<GoalsPanel model={model} onDraftChange={vi.fn()} />);
+  const row = screen.getByText("学院讲座").closest("tr")!;
+  await user.click(within(row).getByRole("button", { name: "编辑记录：学院讲座" }));
+  expect(screen.getByLabelText("编辑活动名称")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "保存" }));
+  expect(screen.queryByLabelText("编辑活动名称")).not.toBeInTheDocument();
+  expect(within(row).getByRole("button", { name: "编辑记录：学院讲座" })).toBeVisible();
 });
 
 it("confirms before deleting a progress record", async () => {
