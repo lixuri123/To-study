@@ -37,12 +37,13 @@
 .goal-checklists { display: grid; gap: 15px; }
 .goal-checklists fieldset { min-width: 0; margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 7px; }
 .goal-checklists legend { padding: 0 4px; color: var(--muted); font-size: 11px; }
-.goal-checklists label { display: flex; align-items: center; gap: 9px; padding: 7px 0; font-size: 13px; }
+.goal-checklists label { display: flex; align-items: center; min-height: 40px; gap: 9px; padding: 7px 0; font-size: 13px; }
 .goal-checklists input { width: 17px; height: 17px; accent-color: #52784a; flex: 0 0 auto; }
 .goal-checklists label.completed span { color: #8c9585; text-decoration: line-through; }
 .goal-checklists time { margin-left: auto; color: var(--muted); font-size: 10px; }
 .goal-entry-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; padding: 14px; border: 1px solid var(--line); border-radius: 7px; background: #fafbf6; }
 .goal-entry-form label { display: grid; gap: 6px; min-width: 0; color: var(--muted); font-size: 10px; }
+.goal-entry-form .input { min-height: 40px; }
 .goal-entry-form select, .goal-table select { width: 100%; min-height: 40px; border: 1px solid #cbd3c9; border-radius: 6px; padding: 8px 10px; color: var(--ink); background: var(--sheet); font: inherit; }
 .goal-entry-form .goal-entry-title { grid-column: 1 / -1; }
 .goal-entry-form > .button { min-height: 40px; }

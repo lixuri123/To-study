@@ -116,6 +116,16 @@ it("records checklist completion with today's local date", async () => {
   expect(model.setChecklistCompletion).toHaveBeenCalledWith("draft", today);
 });
 
+it("keeps checklist and progress form touch targets at least 40px high", async () => {
+  const user = userEvent.setup();
+  render(<GoalsPanel model={modelFor()} onDraftChange={vi.fn()} />);
+  expect(getComputedStyle(screen.getByRole("checkbox", { name: "提交初稿" }).closest("label")!).minHeight).toBe("40px");
+  expect(getComputedStyle(screen.getByLabelText("活动名称")).minHeight).toBe("40px");
+  expect(getComputedStyle(screen.getByLabelText("完成日期")).minHeight).toBe("40px");
+  await user.click(screen.getByRole("button", { name: "高级字段" }));
+  expect(getComputedStyle(screen.getByLabelText("数量")).minHeight).toBe("40px");
+});
+
 it("records a custom activity title after choosing block and category", async () => {
   const model = modelFor();
   const user = userEvent.setup();
