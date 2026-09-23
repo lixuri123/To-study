@@ -68,6 +68,9 @@ export function useGoals(active: boolean) {
       api<GoalCard[]>("/goals"),
       api<GoalTemplate[]>("/goals/templates"),
     ]);
+    if (!Array.isArray(cards) || !Array.isArray(availableTemplates)) {
+      throw new Error("目标数据格式不正确，请重试。");
+    }
     setGoals(cards);
     setTemplates(availableTemplates);
   }), [run]);

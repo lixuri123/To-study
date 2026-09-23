@@ -93,7 +93,7 @@ class ProgressInput(BaseModel):
     @field_validator("completed_on")
     @classmethod
     def not_future(cls, value):
-        if value > date.today():
+        if value > date.today():  # noqa: DTZ011 - completed_on uses the user's local date
             raise ValueError("完成日期不能晚于今天")
         return value
 
@@ -104,7 +104,7 @@ class ChecklistCompletionInput(BaseModel):
     @field_validator("completed_on")
     @classmethod
     def not_future(cls, value):
-        if value is not None and value > date.today():
+        if value is not None and value > date.today():  # noqa: DTZ011 - local calendar date
             raise ValueError("完成日期不能晚于今天")
         return value
 

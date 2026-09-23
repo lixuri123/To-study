@@ -151,7 +151,7 @@ def test_quota_distinct_count_cannot_exceed_category_count():
 
 
 def test_progress_completion_dates_cannot_be_in_the_future():
-    future = date.today() + timedelta(days=1)
+    future = date.today() + timedelta(days=1)  # noqa: DTZ011 - local date contract
     with pytest.raises(ValueError):
         ProgressInput(title="完成活动", completed_on=future, category_id="c1")
     with pytest.raises(ValueError):
@@ -162,7 +162,7 @@ def test_progress_amount_must_be_positive():
     with pytest.raises(ValueError):
         ProgressInput(
             title="完成活动",
-            completed_on=date.today(),
+            completed_on=date.today(),  # noqa: DTZ011 - local date contract
             category_id="c1",
             amount=0,
         )

@@ -1,6 +1,5 @@
 from .schemas import GoalStructureInput
 
-
 TEMPLATE_METADATA = [{
     "key": "full-time-postgraduate-quality",
     "title": "完成研究生综合素质要求",

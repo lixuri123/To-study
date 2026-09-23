@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { GoalsPanel } from "../features/goals/GoalsPanel";
@@ -29,6 +29,7 @@ const detail: GoalDetail = {
     { id: "quota", kind: "quota", title: "学术活动", unit_label: "次", minimum_total: 8, minimum_distinct_categories: 3, position: 1, checklist_items: [], categories: [
       { id: "seminar", name: "学术讲座", minimum_amount: 1, is_required: true, position: 0, suggestions: [{ id: "talk", title: "学院讲座", position: 0 }] },
       { id: "conference", name: "学术会议", minimum_amount: 1, is_required: true, position: 1, suggestions: [] },
+      { id: "training", name: "学术培训", minimum_amount: 1, is_required: false, position: 2, suggestions: [] },
     ] },
   ],
   entries: [{ id: "entry-1", block_id: "quota", category_id: "seminar", title: "学院讲座", completed_on: "2026-09-18", amount: 1, created_at: "2026-09-18T08:00:00Z", updated_at: "2026-09-18T08:00:00Z" }],
@@ -191,4 +192,134 @@ it("keeps record labels available to the 360px table layout", () => {
   const row = screen.getByText("学院讲座").closest("tr")!;
   expect(within(row).getByText("2026-09-18").closest("td")?.getAttribute("data-label")).toBe("完成日期");
   expect(within(row).getByText("学院讲座").closest("td")?.getAttribute("data-label")).toBe("活动");
+});
+
+async function newEditor(overrides: Partial<GoalsModel> = {}) {
+  const model = modelFor({ goals: [], selected: null, ...overrides });
+  const dirty = vi.fn();
+  const user = userEvent.setup();
+  render(<GoalsPanel model={model} onDraftChange={dirty} />);
+  await user.click(screen.getByRole("button", { name: "新建目标" }));
+  return { model, dirty, user };
+}
+
+it("starts a new goal with one checklist and one empty item", async () => {
+  await newEditor();
+  expect(screen.getAllByLabelText("条件名称")).toHaveLength(1);
+  expect(screen.getByLabelText("条件类型")).toHaveValue("checklist");
+  expect(screen.getAllByLabelText("清单项名称")).toHaveLength(1);
+  expect(screen.getByLabelText("清单项名称")).toHaveValue("");
+});
+
+it("confirms before a kind switch discards entered fields", async () => {
+  const { user } = await newEditor();
+  await user.type(screen.getByLabelText("清单项名称"), "初稿");
+  await user.selectOptions(screen.getByLabelText("条件类型"), "quota");
+  expect(screen.getByRole("alertdialog")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "取消" }));
+  expect(screen.getByLabelText("清单项名称")).toHaveValue("初稿");
+  await user.selectOptions(screen.getByLabelText("条件类型"), "quota");
+  await user.click(screen.getByRole("button", { name: "切换类型" }));
+  expect(screen.queryByLabelText("清单项名称")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("最低累计量")).toHaveValue(null);
+});
+
+it("rejects quota blocks without categories or a rule", async () => {
+  const { user, model } = await newEditor();
+  await user.type(screen.getByLabelText("目标名称"), "准备毕业");
+  await user.selectOptions(screen.getByLabelText("条件类型"), "quota");
+  await user.type(screen.getByLabelText("条件名称"), "活动");
+  await user.click(screen.getByRole("button", { name: "保存目标" }));
+  expect(screen.getByText("计数型条件至少需要一个统计分类")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "添加分类" }));
+  await user.type(screen.getByLabelText("分类名称"), "自定分类");
+  await user.click(screen.getByRole("button", { name: "保存目标" }));
+  expect(screen.getByText("计数型条件至少需要一项达标规则")).toBeVisible();
+  expect(model.createGoal).not.toHaveBeenCalled();
+});
+
+it("saves a mixed goal with exact custom category and suggestion structure", async () => {
+  const { user, model } = await newEditor();
+  await user.type(screen.getByLabelText("目标名称"), "准备毕业");
+  await user.type(screen.getByLabelText("目标说明"), "毕业准备");
+  await user.type(screen.getByLabelText("条件名称"), "论文");
+  await user.type(screen.getByLabelText("清单项名称"), "提交初稿");
+  await user.click(screen.getByRole("button", { name: "添加计数条件" }));
+  await user.type(screen.getAllByLabelText("条件名称")[1], "学术活动");
+  await user.type(screen.getByLabelText("最低累计量"), "2");
+  await user.click(screen.getByRole("button", { name: "添加分类" }));
+  await user.type(screen.getByLabelText("分类名称"), "自定分类");
+  await user.click(screen.getByText("活动名称建议"));
+  await user.click(screen.getByRole("button", { name: "添加建议" }));
+  await user.type(screen.getByLabelText("建议名称"), "自定工作坊");
+  await user.click(screen.getByRole("button", { name: "保存目标" }));
+  expect(model.createGoal).toHaveBeenCalledWith({ title: "准备毕业", description: "毕业准备", blocks: [
+    { kind: "checklist", title: "论文", unit_label: "次", minimum_total: null, minimum_distinct_categories: null, position: 0, checklist_items: [{ title: "提交初稿", position: 0 }], categories: [] },
+    { kind: "quota", title: "学术活动", unit_label: "次", minimum_total: 2, minimum_distinct_categories: null, position: 1, checklist_items: [], categories: [{ name: "自定分类", minimum_amount: 1, is_required: false, position: 0, suggestions: [{ title: "自定工作坊", position: 0 }] }] },
+  ] });
+  expect(model.previewStructure).not.toHaveBeenCalled();
+});
+
+it("previews an existing goal before saving and strips completion fields", async () => {
+  const order: string[] = [];
+  const model = modelFor({ previewStructure: vi.fn(async () => { order.push("preview"); return { current_summary: detail.summary, proposed_summary: detail.summary, warnings: [] }; }), saveStructure: vi.fn(async () => { order.push("save"); return detail; }) });
+  const user = userEvent.setup();
+  render(<GoalsPanel model={model} onDraftChange={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "编辑目标结构" }));
+  await user.type(screen.getByLabelText("目标名称"), "新版");
+  await user.click(screen.getByRole("button", { name: "保存目标" }));
+  expect(order).toEqual(["preview", "save"]);
+  const draft = vi.mocked(model.saveStructure).mock.calls[0][0];
+  expect(draft.blocks[0].checklist_items[0]).toEqual({ id: "draft", title: "提交初稿", position: 0 });
+});
+
+it("shows preview warnings and attainment impact, with cancel preserving dirty draft", async () => {
+  const dirty = vi.fn();
+  const model = modelFor({ previewStructure: vi.fn().mockResolvedValue({ current_summary: detail.summary, proposed_summary: { ...detail.summary, attained: false }, warnings: ["清单完成状态将被删除"] }) });
+  const user = userEvent.setup();
+  render(<GoalsPanel model={model} onDraftChange={dirty} />);
+  await user.click(screen.getByRole("button", { name: "编辑目标结构" }));
+  await user.type(screen.getByLabelText("目标名称"), "新版");
+  await user.click(screen.getByRole("button", { name: "保存目标" }));
+  expect(screen.getByRole("alertdialog")).toHaveTextContent("清单完成状态将被删除");
+  expect(screen.getByRole("alertdialog")).toHaveTextContent("未达成");
+  await user.click(screen.getByRole("button", { name: "取消" }));
+  expect(model.saveStructure).not.toHaveBeenCalled();
+  expect(dirty).toHaveBeenLastCalledWith(true);
+  expect(screen.getByLabelText("目标名称")).toHaveValue("研究生综合素质新版");
+  await user.click(screen.getByRole("button", { name: "保存目标" }));
+  await user.click(screen.getByRole("button", { name: "仍然保存" }));
+  expect(model.saveStructure).toHaveBeenCalledOnce();
+});
+
+it("preserves all typed values after save rejection and retries the same draft", async () => {
+  const createGoal = vi.fn().mockRejectedValueOnce(new Error("网络中断")).mockResolvedValue(detail);
+  const { user, dirty } = await newEditor({ createGoal });
+  await user.type(screen.getByLabelText("目标名称"), "准备毕业");
+  await user.type(screen.getByLabelText("条件名称"), "论文");
+  await user.type(screen.getByLabelText("清单项名称"), "初稿");
+  await user.click(screen.getByRole("button", { name: "保存目标" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("网络中断");
+  expect(screen.getByLabelText("目标名称")).toHaveValue("准备毕业");
+  expect(screen.getByLabelText("条件名称")).toHaveValue("论文");
+  expect(screen.getByLabelText("清单项名称")).toHaveValue("初稿");
+  expect(dirty).toHaveBeenLastCalledWith(true);
+  await user.click(screen.getByRole("button", { name: "重试" }));
+  await waitFor(() => expect(dirty).toHaveBeenLastCalledWith(false));
+  expect(createGoal.mock.calls[0]).toEqual(createGoal.mock.calls[1]);
+});
+
+it("preserves an existing draft on preview failure and retries preview before save", async () => {
+  const previewStructure = vi.fn().mockRejectedValueOnce(new Error("预览失败")).mockResolvedValue({ current_summary: detail.summary, proposed_summary: detail.summary, warnings: [] });
+  const model = modelFor({ previewStructure, saveStructure: vi.fn().mockResolvedValue(detail) });
+  const user = userEvent.setup();
+  render(<GoalsPanel model={model} onDraftChange={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "编辑目标结构" }));
+  await user.type(screen.getByLabelText("目标说明"), "保留草稿");
+  await user.click(screen.getByRole("button", { name: "保存目标" }));
+  expect(model.saveStructure).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("目标说明")).toHaveValue("在日常记录中完成培养要求保留草稿");
+  await user.click(screen.getByRole("button", { name: "重试" }));
+  expect(previewStructure).toHaveBeenCalledTimes(2);
+  expect(model.saveStructure).toHaveBeenCalledOnce();
 });

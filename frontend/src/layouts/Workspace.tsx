@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, CalendarDays, CheckCheck, Leaf, LoaderCircle, LogOut } from "lucide-react";
+import { BookOpen, CalendarDays, CheckCheck, Leaf, LoaderCircle, LogOut, Target } from "lucide-react";
 import { api, authApi, type User, type Note, type Task } from "../api";
 import { Button, Confirm } from "../components/ui";
 import { NotesPanel } from "../features/notes/NotesPanel";
@@ -12,17 +12,21 @@ import { AffairsPanel } from "../features/affairs/AffairsPanel";
 import { blankAffair, useAffairs } from "../features/affairs/useAffairs";
 import { TimetablePanel } from "../features/timetable/TimetablePanel";
 import { useDesktopNotifications } from "../desktop/useDesktopNotifications";
+import { GoalsPanel } from "../features/goals/GoalsPanel";
+import { useGoals } from "../features/goals/useGoals";
 export function Workspace({ user, onLogout, active = true }: {
   user: User;
   active?: boolean;
   onLogout: () => void;
 }) {
   const username=user.username;
-  const [view, setView]=useState<"notes"|"tasks"|"affairs"|"timetable">("notes");
+  const [view, setView]=useState<"notes"|"tasks"|"affairs"|"timetable"|"goals">("notes");
   const affairsModel = useAffairs(active);
+  const goalsModel = useGoals(active);
   const notificationStatus = useDesktopNotifications(active);
   const [affairDirty, setAffairDirty] = useState(false);
   const [timetableDirty, setTimetableDirty] = useState(false);
+  const [goalsDirty, setGoalsDirty] = useState(false);
   const [initialAffair, setInitialAffair] = useState<string | null>(null);
   const [loading, setLoading]=useState(true);
   const actions=useWorkspaceActions();
@@ -31,7 +35,7 @@ export function Workspace({ user, onLogout, active = true }: {
   const tasksModel=useTasks(actions);
   const { notes, guard }=notesModel;
   const { tasks }=tasksModel;
-  const navigationBusy = busy || tasksModel.hasPending || affairsModel.busy || affairDirty || timetableDirty;
+  const navigationBusy = busy || tasksModel.hasPending || affairsModel.busy || goalsModel.busy || affairDirty || timetableDirty || goalsDirty;
   useEffect(()=>{
     const open=(event:Event)=>{
       const id=(event as CustomEvent<string>).detail;
@@ -51,7 +55,7 @@ export function Workspace({ user, onLogout, active = true }: {
     });
   }
   useDesktopCloseGuard(close => {
-    if (navigationBusy) { actions.setNotice(timetableDirty ? "课表正在编辑或保存，请先完成或取消编辑。" : affairDirty ? "事务有未保存修改，请先保存或关闭编辑。" : "正在保存，请稍后再关闭窗口。"); return; }
+    if (navigationBusy) { actions.setNotice(goalsDirty ? "目标有未保存修改，请先保存或取消编辑。" : timetableDirty ? "课表正在编辑或保存，请先完成或取消编辑。" : affairDirty ? "事务有未保存修改，请先保存或关闭编辑。" : "正在保存，请稍后再关闭窗口。"); return; }
     if (!active && notesModel.dirty) {
       setConfirm({title: "关闭前，保留这份草稿？", description: "登录已失效。继续编辑并重新登录后可以保存；放弃修改将关闭窗口。", label: "放弃修改", action: close});
       return;
@@ -109,6 +113,9 @@ export function Workspace({ user, onLogout, active = true }: {
               .padStart(2, "0")}
           </span>
         </button>
+        <button className={view==="goals"? "nav-item active":"nav-item"} onClick={() => guard(() => setView("goals"))} disabled={navigationBusy}>
+          <Target size={19} />我的目标<span>{goalsModel.goals.filter(goal => !goal.archived_at && !goal.summary.attained).length.toString().padStart(2, "0")}</span>
+        </button>
       </nav>
       <div className="sidebar-quote">
         <span>“</span>
@@ -137,7 +144,7 @@ export function Workspace({ user, onLogout, active = true }: {
       <header className="topbar">
         <span>
           个人工作台 <span className="slash">/</span>{" "}
-          {view==="notes"? "笔记":view === "affairs" ? "信息与事务" : view === "timetable" ? "课表" : "待办"}
+          {view==="notes"? "笔记":view === "affairs" ? "信息与事务" : view === "timetable" ? "课表" : view === "goals" ? "目标" : "待办"}
         </span>
         <span className="today">
           {new Date().toLocaleDateString("zh-CN", {
@@ -152,19 +159,19 @@ export function Workspace({ user, onLogout, active = true }: {
           <span className="eyebrow">
             {view==="notes"
               ? "COLLECT YOUR THOUGHTS"
-              : view === "timetable" ? "A WEEK OF LEARNING" : "ONE THING AT A TIME"}
+              : view === "timetable" ? "A WEEK OF LEARNING" : view === "goals" ? "GOALS & PROGRESS" : "ONE THING AT A TIME"}
           </span>
           <h1>
-            {view==="notes"? "想法，在这里生长。":view === "affairs" ? "重要的事，都有着落。" : view === "timetable" ? "每一周，学有所获。" : "一步一步，慢慢来。"}
+            {view==="notes"? "想法，在这里生长。":view === "affairs" ? "重要的事，都有着落。" : view === "timetable" ? "每一周，学有所获。" : view === "goals" ? "想做成的事，一步步抵达。" : "一步一步，慢慢来。"}
           </h1>
           <p>
             {view==="notes"
               ? "记录灵感、日常与值得记住的小事。"
-              : view === "timetable" ? "跟着教学周，安排好每一次学习。" : "把大大的计划，变成今天的小小行动。"}
+              : view === "timetable" ? "跟着教学周，安排好每一次学习。" : view === "goals" ? "把长期结果拆成清楚、可验证的条件。" : "把大大的计划，变成今天的小小行动。"}
           </p>
         </div>
         <span className="heading-mark" aria-hidden="true">
-          {view==="notes"? <Leaf size={42} /> : view === "timetable" ? <CalendarDays size={42} /> : <CheckCheck size={42} />}
+          {view==="notes"? <Leaf size={42} /> : view === "timetable" ? <CalendarDays size={42} /> : view === "goals" ? <Target size={42} /> : <CheckCheck size={42} />}
         </span>
       </section>
       {error&&(<div className="error banner" role="alert">
@@ -182,7 +189,7 @@ export function Workspace({ user, onLogout, active = true }: {
       {loading? (<div className="empty" role="status">
         <LoaderCircle className="spin" />
         正在整理你的空间…
-      </div>):view==="notes"? (<NotesPanel model={notesModel} busy={busy} />):view === "timetable" ? <TimetablePanel active={active} onDraftChange={setTimetableDirty} /> : view === "affairs" ? <AffairsPanel model={affairsModel} notes={notes} initial={initialAffair} consumeInitial={() => setInitialAffair(null)} onDraftChange={setAffairDirty} openNote={note => {notesModel.select(note); setView("notes");}} createNote={async title => {let created: Note | undefined; await run(async () => {created = await api<Note>("/notes", "POST", {title, content: ""}); notesModel.initialize([created, ...notes]);}); return created;}} /> : (<TasksPanel model={tasksModel} busy={busy} />)}
+      </div>):view==="notes"? (<NotesPanel model={notesModel} busy={busy} />):view === "timetable" ? <TimetablePanel active={active} onDraftChange={setTimetableDirty} /> : view === "goals" ? <GoalsPanel model={goalsModel} onDraftChange={setGoalsDirty} /> : view === "affairs" ? <AffairsPanel model={affairsModel} notes={notes} initial={initialAffair} consumeInitial={() => setInitialAffair(null)} onDraftChange={setAffairDirty} openNote={note => {notesModel.select(note); setView("notes");}} createNote={async title => {let created: Note | undefined; await run(async () => {created = await api<Note>("/notes", "POST", {title, content: ""}); notesModel.initialize([created, ...notes]);}); return created;}} /> : (<TasksPanel model={tasksModel} busy={busy} />)}
       <footer className="page-footer">
         <Leaf size={13} /> 青笺 · 给思绪一点留白
       </footer>
