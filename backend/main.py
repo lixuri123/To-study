@@ -13,6 +13,7 @@ from .notes.router import router as notes_router
 from .tasks.router import router as tasks_router
 from .affairs.router import router as affairs_router
 from .timetable.router import router as timetable_router
+from .goals.router import router as goals_router
 from .agent.router import router as agent_router
 from .reminders.router import router as reminders_router
 from .backup import router as backup_router
@@ -44,6 +45,7 @@ def create_app(url: str | None = None):
     app.include_router(tasks_router)
     app.include_router(affairs_router)
     app.include_router(timetable_router)
+    app.include_router(goals_router)
     app.include_router(agent_router)
     app.include_router(reminders_router)
     app.include_router(backup_router)

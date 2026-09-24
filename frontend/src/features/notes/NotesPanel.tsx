@@ -1,4 +1,5 @@
-import { ArrowLeft, ArrowUpRight, BookOpen, FileText, LoaderCircle, Plus, RotateCcw, Save, Search, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, BookOpen, FileText, LoaderCircle, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Save, Search, Trash2, X } from "lucide-react";
 import { Button, Input } from "../../components/ui";
 import { date } from "../../components/format";
 import type { NotesModel } from "./useNotes";
@@ -9,11 +10,23 @@ export function NotesPanel({ model, busy }: {
   busy: boolean;
 }) {
   const { notes, selected, draft, setDraft, query, setQuery, dirty, saveState, editorOpen, setEditorOpen, select, guard, save, deleteNote, visibleNotes }=model;
-  return (<section className={`notes-layout ${editorOpen? "show-editor":"show-library"}`}>
+  const [libraryHidden, setLibraryHidden] = useState(() => {
+    try { return window.localStorage.getItem("qingjian:note-library-hidden") === "1"; }
+    catch { return false; }
+  });
+  function toggleLibrary() {
+    setLibraryHidden(hidden => {
+      const next = !hidden;
+      try { window.localStorage.setItem("qingjian:note-library-hidden", next ? "1" : "0"); }
+      catch { /* Browsers may disable local storage. */ }
+      return next;
+    });
+  }
+  return (<section className={`notes-layout ${editorOpen? "show-editor":"show-library"}${libraryHidden ? " library-collapsed" : ""}`}>
     <div className="note-library">
       <div className="section-title">
         <h2>
-          全部笔记 <span>{notes.length}</span>
+          笔记 <span>{notes.length}</span>
         </h2>
         <Button variant="ghost" aria-label="新建笔记" disabled={busy} onClick={() => guard(() => select(null))}>
           <Plus size={20} />
@@ -24,22 +37,15 @@ export function NotesPanel({ model, busy }: {
         <Input aria-label="搜索笔记" placeholder="搜索标题或正文…" value={query} onChange={(e) => setQuery(e.target.value)} />
         {query&&(<button className="search-clear" aria-label="清空搜索" onClick={() => setQuery("")}><X size={14} /></button>)}
       </div>
-      <div className="search-count" aria-live="polite">{visibleNotes.length} 条结果</div>
-      <div className="note-list">
-        {visibleNotes.map((n) => (<button disabled={busy} key={n.id} className={`note-card ${selected?.id===n.id? "selected":""}`} onClick={() => {
+      <div className="note-file-list" aria-label="笔记文件">
+        {visibleNotes.map((n) => (<button disabled={busy} key={n.id} className={`note-file ${selected?.id===n.id? "selected":""}`} onClick={() => {
           if(selected?.id!==n.id)
             guard(() => select(n));
           else setEditorOpen(true);
         }}>
-          <span className="note-card-top">
-            <FileText size={16} />
-            <time>{date(n.updated_at)}</time>
-          </span>
-          <h3>{n.title||"无标题笔记"}</h3>
-          <p>{n.content||"留一点空白，等灵感到来。"}</p>
-          <span className="note-card-bottom">
-            {n.content.length} 字 <ArrowUpRight size={15} />
-          </span>
+          <FileText size={15} />
+          <span>{n.title||"无标题笔记"}</span>
+          <time>{date(n.updated_at)}</time>
         </button>))}
         {!visibleNotes.length&&(<div className="empty">
           <BookOpen />
@@ -50,13 +56,16 @@ export function NotesPanel({ model, busy }: {
         </div>)}
       </div>
       <div className="library-foot">
-        共 {notes.length} 篇 · 留住每一个想法
+        {query ? `${visibleNotes.length} 条结果` : `共 ${notes.length} 篇`}
       </div>
     </div>
     <article className="editor">
       <div className="editor-toolbar">
         <span>
           <Button className="notes-back" variant="ghost" aria-label="返回笔记列表" onClick={() => guard(() => setEditorOpen(false))}><ArrowLeft size={16} /></Button>
+          <Button className="note-library-toggle" variant="ghost" aria-label={libraryHidden ? "展开笔记列表" : "收起笔记列表"} aria-expanded={!libraryHidden} title={libraryHidden ? "展开笔记列表" : "收起笔记列表"} onClick={toggleLibrary}>
+            {libraryHidden ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </Button>
           <i className={saveState==="failed"?"dot failed":dirty? "dot dirty":"dot"} />
           {saveState==="saving"?"正在保存…":saveState==="failed"?"保存失败":dirty? "有未保存的修改":selected? "已保存":"新的一页"}
         </span>

@@ -5,13 +5,26 @@ build/
 dist/
 wheels/
 *.egg-info
+*.db
+*.db-wal
+*.db-shm
+*.log
 
 # Virtual environments
 .venv
 node_modules/
-.pytest_cache/
-.pytest-affairs-*/
+.pytest*/
 .ruff_cache/
+.superpowers/sdd/
 data/
+docker-data/
+backups/
 .env
+.env.*
+!.env.example
 *.tsbuildinfo
+frontend/.task*-dist/
+desktop/src-tauri/target/
+
+# Local imports containing personal data
+StudentKb*.docx
