@@ -12,6 +12,10 @@
 
 入口会先执行数据库迁移，保留现有账号、笔记和待办。开发前端时，可在 `frontend` 单独执行 `npm run dev`，通过 Vite 代理访问 `/api`。
 
+## Docker 部署
+
+仓库提供多阶段 `Dockerfile` 和 `compose.yaml`，一个容器同时提供 Web 页面与 FastAPI 接口。服务器部署、现有 SQLite 数据迁移、HTTPS 配置、更新和恢复步骤见 [Docker 部署文档](docs/docker-deployment.md)。数据库、环境变量和 MCP 本机凭据不会打入镜像或提交 Git。
+
 ## 模块
 
 - `backend/auth`：注册、登录、会话撤销、认证与限流。

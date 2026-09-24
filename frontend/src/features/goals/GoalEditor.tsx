@@ -116,10 +116,12 @@ export function GoalEditor({ initial, busy, onPreview, onSave, onCancel, onDirty
       if (onPreview) {
         const preview = await onPreview(value);
         if (!preview) throw new Error("预览失败，请重试。");
-        const messages = [...preview.warnings];
-        if (preview.current_summary.attained !== preview.proposed_summary.attained) messages.push(`达成结果将从“${preview.current_summary.attained ? "已达成" : "未达成"}”变为“${preview.proposed_summary.attained ? "已达成" : "未达成"}”。`);
-        if (messages.length) {
-          setConfirm({ title: "保存这些条件修改？", description: messages.join("\n"), label: "仍然保存", action: () => run(() => persist(value)) });
+        if (preview.warnings.length) {
+          setConfirm({ title: "这些修改暂时无法保存", description: `${preview.warnings.join("\n")} 请保留该清单项或分类；如需删除分类，请先处理其完成记录。`, label: "返回编辑", action: () => {} });
+          return;
+        }
+        if (preview.current_summary.attained !== preview.proposed_summary.attained) {
+          setConfirm({ title: "保存这些条件修改？", description: `达成结果将从“${preview.current_summary.attained ? "已达成" : "未达成"}”变为“${preview.proposed_summary.attained ? "已达成" : "未达成"}”。`, label: "仍然保存", action: () => run(() => persist(value)) });
           return;
         }
       }

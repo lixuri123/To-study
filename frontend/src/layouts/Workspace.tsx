@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, CalendarDays, CheckCheck, Leaf, LoaderCircle, LogOut, Target } from "lucide-react";
+import { BookOpen, CalendarDays, CheckCheck, Leaf, LoaderCircle, LogOut, PanelLeftClose, PanelLeftOpen, Target } from "lucide-react";
 import { api, authApi, type User, type Note, type Task } from "../api";
 import { Button, Confirm } from "../components/ui";
 import { NotesPanel } from "../features/notes/NotesPanel";
@@ -21,6 +21,10 @@ export function Workspace({ user, onLogout, active = true }: {
 }) {
   const username=user.username;
   const [view, setView]=useState<"notes"|"tasks"|"affairs"|"timetable"|"goals">("notes");
+  const [sidebarHidden, setSidebarHidden] = useState(() => {
+    try { return window.localStorage.getItem("qingjian:sidebar-hidden") === "1"; }
+    catch { return false; }
+  });
   const affairsModel = useAffairs(active);
   const goalsModel = useGoals(active);
   const notificationStatus = useDesktopNotifications(active);
@@ -36,6 +40,14 @@ export function Workspace({ user, onLogout, active = true }: {
   const { notes, guard }=notesModel;
   const { tasks }=tasksModel;
   const navigationBusy = busy || tasksModel.hasPending || affairsModel.busy || goalsModel.busy || affairDirty || timetableDirty || goalsDirty;
+  function toggleSidebar() {
+    setSidebarHidden(hidden => {
+      const next = !hidden;
+      try { window.localStorage.setItem("qingjian:sidebar-hidden", next ? "1" : "0"); }
+      catch { /* Browsers may disable local storage. */ }
+      return next;
+    });
+  }
   useEffect(()=>{
     const open=(event:Event)=>{
       const id=(event as CustomEvent<string>).detail;
@@ -89,7 +101,7 @@ export function Workspace({ user, onLogout, active = true }: {
     void load();
     return () => { mounted.current=false; loadGeneration.current++; };
   }, []);
-  return (<div className={view === "timetable" ? "workspace workspace-flame" : "workspace"}>
+  return (<div className={`workspace${view === "timetable" ? " workspace-flame" : ""}${sidebarHidden ? " sidebar-hidden" : ""}`}>
     <aside className="sidebar">
       <div className="brand">
         <Leaf />
@@ -142,10 +154,15 @@ export function Workspace({ user, onLogout, active = true }: {
     </aside>
     <main className="main">
       <header className="topbar">
-        <span>
-          个人工作台 <span className="slash">/</span>{" "}
-          {view==="notes"? "笔记":view === "affairs" ? "信息与事务" : view === "timetable" ? "课表" : view === "goals" ? "目标" : "待办"}
-        </span>
+        <div className="topbar-leading">
+          <button className="sidebar-toggle" type="button" onClick={toggleSidebar} aria-label={sidebarHidden ? "展开侧栏" : "收起侧栏"} aria-expanded={!sidebarHidden} title={sidebarHidden ? "展开侧栏" : "收起侧栏"}>
+            {sidebarHidden ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          </button>
+          <span>
+            个人工作台 <span className="slash">/</span>{" "}
+            {view==="notes"? "笔记":view === "affairs" ? "信息与事务" : view === "timetable" ? "课表" : view === "goals" ? "目标" : "待办"}
+          </span>
+        </div>
         <span className="today">
           {new Date().toLocaleDateString("zh-CN", {
             month: "long",
@@ -154,7 +171,7 @@ export function Workspace({ user, onLogout, active = true }: {
           })}
         </span>
       </header>
-      <section className="page-heading" hidden={view === "timetable"}>
+      <section className="page-heading" hidden={view === "timetable" || view === "notes"}>
         <div>
           <span className="eyebrow">
             {view==="notes"
