@@ -1,14 +1,22 @@
-import { useState } from "react";
+import { useRef, useState, type PointerEvent } from "react";
 import { ArrowLeft, BookOpen, FileText, LoaderCircle, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Save, Search, Trash2, X } from "lucide-react";
 import { Button, Input } from "../../components/ui";
 import { date } from "../../components/format";
 import type { NotesModel } from "./useNotes";
-import { MarkdownEditor } from "./MarkdownEditor";
+import { MarkdownEditor, MarkdownModes, type Mode } from "./MarkdownEditor";
 import "./notes.css";
-export function NotesPanel({ model, busy }: {
+export function NotesPanel({ model, busy, focused = false, onToggleFocus }: {
   model: NotesModel;
   busy: boolean;
+  focused?: boolean;
+  onToggleFocus?: () => void;
 }) {
+  const [mode, setMode] = useState<Mode>("write");
+  const editorRef = useRef<HTMLElement>(null);
+  const [paperWidth, setPaperWidth] = useState(() => {
+    try { return Number(window.localStorage.getItem("qingjian:note-paper-width")) || 820; }
+    catch { return 820; }
+  });
   const { notes, selected, draft, setDraft, query, setQuery, dirty, saveState, editorOpen, setEditorOpen, select, guard, save, deleteNote, visibleNotes }=model;
   const [libraryHidden, setLibraryHidden] = useState(() => {
     try { return window.localStorage.getItem("qingjian:note-library-hidden") === "1"; }
@@ -22,7 +30,27 @@ export function NotesPanel({ model, busy }: {
       return next;
     });
   }
-  return (<section className={`notes-layout ${editorOpen? "show-editor":"show-library"}${libraryHidden ? " library-collapsed" : ""}`}>
+  function resizePaper(event: PointerEvent<HTMLButtonElement>) {
+    if (!editorRef.current) return;
+    event.preventDefault();
+    const center = editorRef.current.getBoundingClientRect().left + editorRef.current.clientWidth / 2;
+    const move = (pointer: globalThis.PointerEvent) => {
+      const available = Math.max(460, editorRef.current!.clientWidth - 24);
+      const width = Math.round(Math.max(460, Math.min(available, Math.abs(pointer.clientX - center) * 2)));
+      setPaperWidth(width);
+      try { window.localStorage.setItem("qingjian:note-paper-width", String(width)); }
+      catch { /* Browsers may disable local storage. */ }
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      document.body.classList.remove("resizing-note-paper");
+    };
+    document.body.classList.add("resizing-note-paper");
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
+  }
+  return (<section className={`notes-layout writing-mode-${mode} ${editorOpen? "show-editor":"show-library"}${libraryHidden || focused ? " library-collapsed" : ""}`}>
     <div className="note-library">
       <div className="section-title">
         <h2>
@@ -59,7 +87,7 @@ export function NotesPanel({ model, busy }: {
         {query ? `${visibleNotes.length} 条结果` : `共 ${notes.length} 篇`}
       </div>
     </div>
-    <article className="editor">
+    <article className="editor" ref={editorRef}>
       <div className="editor-toolbar">
         <span>
           <Button className="notes-back" variant="ghost" aria-label="返回笔记列表" onClick={() => guard(() => setEditorOpen(false))}><ArrowLeft size={16} /></Button>
@@ -70,6 +98,8 @@ export function NotesPanel({ model, busy }: {
           {saveState==="saving"?"正在保存…":saveState==="failed"?"保存失败":dirty? "有未保存的修改":selected? "已保存":"新的一页"}
         </span>
         <div>
+          <MarkdownModes mode={mode} onChange={setMode} />
+          <Button variant="ghost" aria-pressed={focused} onClick={onToggleFocus}>{focused ? "退出专注" : "专注"}</Button>
           {saveState==="failed"&&(<Button variant="outline" aria-label="重试保存" disabled={busy} onClick={() => void save()}><RotateCcw size={15} />重试保存</Button>)}
           {selected&&(<Button variant="ghost" aria-label="删除当前笔记" disabled={busy} onClick={deleteNote}>
             <Trash2 size={17} />
@@ -80,21 +110,16 @@ export function NotesPanel({ model, busy }: {
           </Button>
         </div>
       </div>
-      <div className="editor-paper">
+      <div className="editor-paper-wrap">
+      <div className="editor-paper" style={{ width: `min(100%, ${paperWidth}px)` }}>
         <Input aria-label="笔记标题" className="note-title" placeholder="给想法起个名字…" value={draft.title} disabled={busy} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
-        <div className="note-meta">
-          <span>
-            {selected
-              ? `最后更新于 ${date(selected.updated_at)}`
-              :"新笔记 · 从一句话开始"}
-          </span>
-          <span>个人笔记</span>
-        </div>
-        <MarkdownEditor value={draft.content} disabled={busy} onChange={(content) => setDraft({ ...draft, content })} />
+        <MarkdownEditor documentId={selected?.id ?? 'new'} onComposingChange={model.setComposing} mode={mode} value={draft.content} disabled={busy} onChange={(content) => setDraft({ ...draft, content })} />
+        <button className="note-width-handle" type="button" aria-label="拖动调整写作区宽度" title="拖动调整写作区宽度" onPointerDown={resizePaper}><span /></button>
+      </div>
       </div>
       <footer className="editor-footer">
         <span>{draft.content.length} 字</span>
-        <span>写下来，就有了意义。</span>
+        <span>{selected ? `更新于 ${date(selected.updated_at)}` : "停止输入后自动保存"}</span>
       </footer>
     </article>
   </section>);

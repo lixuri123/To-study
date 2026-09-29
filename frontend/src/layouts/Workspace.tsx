@@ -20,6 +20,7 @@ export function Workspace({ user, onLogout, active = true }: {
   onLogout: () => void;
 }) {
   const username=user.username;
+  const [notesFocused, setNotesFocused] = useState(false);
   const [view, setView]=useState<"notes"|"tasks"|"affairs"|"timetable"|"goals">("notes");
   const [sidebarHidden, setSidebarHidden] = useState(() => {
     try { return window.localStorage.getItem("qingjian:sidebar-hidden") === "1"; }
@@ -101,7 +102,7 @@ export function Workspace({ user, onLogout, active = true }: {
     void load();
     return () => { mounted.current=false; loadGeneration.current++; };
   }, []);
-  return (<div className={`workspace${view === "timetable" ? " workspace-flame" : ""}${sidebarHidden ? " sidebar-hidden" : ""}`}>
+  return (<div className={`workspace${view === "timetable" ? " workspace-flame" : ""}${sidebarHidden ? " sidebar-hidden" : ""}${view === "notes" && notesFocused ? " notes-focused" : ""}`}>
     <aside className="sidebar">
       <div className="brand">
         <Leaf />
@@ -206,7 +207,7 @@ export function Workspace({ user, onLogout, active = true }: {
       {loading? (<div className="empty" role="status">
         <LoaderCircle className="spin" />
         正在整理你的空间…
-      </div>):view==="notes"? (<NotesPanel model={notesModel} busy={busy} />):view === "timetable" ? <TimetablePanel active={active} onDraftChange={setTimetableDirty} /> : view === "goals" ? <GoalsPanel model={goalsModel} onDraftChange={setGoalsDirty} /> : view === "affairs" ? <AffairsPanel model={affairsModel} notes={notes} initial={initialAffair} consumeInitial={() => setInitialAffair(null)} onDraftChange={setAffairDirty} openNote={note => {notesModel.select(note); setView("notes");}} createNote={async title => {let created: Note | undefined; await run(async () => {created = await api<Note>("/notes", "POST", {title, content: ""}); notesModel.initialize([created, ...notes]);}); return created;}} /> : (<TasksPanel model={tasksModel} busy={busy} />)}
+      </div>):view==="notes"? (<NotesPanel model={notesModel} busy={busy} focused={notesFocused} onToggleFocus={() => {setNotesFocused(value => !value); notesModel.setEditorOpen(true);}} />):view === "timetable" ? <TimetablePanel active={active} onDraftChange={setTimetableDirty} /> : view === "goals" ? <GoalsPanel model={goalsModel} onDraftChange={setGoalsDirty} /> : view === "affairs" ? <AffairsPanel model={affairsModel} notes={notes} initial={initialAffair} consumeInitial={() => setInitialAffair(null)} onDraftChange={setAffairDirty} openNote={note => {notesModel.select(note); setView("notes");}} createNote={async title => {let created: Note | undefined; await run(async () => {created = await api<Note>("/notes", "POST", {title, content: ""}); notesModel.initialize([created, ...notes]);}); return created;}} /> : (<TasksPanel model={tasksModel} busy={busy} />)}
       <footer className="page-footer">
         <Leaf size={13} /> 青笺 · 给思绪一点留白
       </footer>

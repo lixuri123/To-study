@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Note } from "../../api";
 import type { WorkspaceActions } from "../../layouts/useWorkspaceActions";
 const blank={ title: "", content: "" };
@@ -9,8 +9,12 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
   const [query, setQuery]=useState("");
   const [saveState, setSaveState]=useState<"idle"|"saving"|"saved"|"failed">("idle");
   const [editorOpen, setEditorOpen]=useState(false);
+  const [composing, setComposing] = useState(false);
+  const saving = useRef(false);
+  const failedDraft = useRef<string | null>(null);
   const dirty=draft.title!==(selected?.title??"")||draft.content!==(selected?.content??"");
   function select(note: Note|null) {
+    if (saving.current) return;
     setSelected(note);
     setDraft(note? { title: note.title, content: note.content }:blank);
     actions.setNotice("");
@@ -36,7 +40,7 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
   const save=useCallback(async (): Promise<boolean> => {
-    if(!enabled||actions.busy)
+    if(!enabled||actions.busy||saving.current)
       return false;
     if(!draft.title.trim()) {
       actions.setError("请先给笔记写一个标题。");
@@ -44,22 +48,36 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
       return false;
     }
     setSaveState("saving");
+    saving.current = true;
     let savedNote: Note|undefined;
     const succeeded=await actions.run(async () => {
+      if (selected) {
+        const current = (await api<Note[]>("/notes")).find(note => note.id === selected.id);
+        if (!current || current.updated_at !== selected.updated_at || current.content !== selected.content || current.title !== selected.title)
+          throw new Error("这篇笔记已在其他页面修改或删除。草稿已保留，请复制草稿后刷新核对。");
+      }
       savedNote=await api<Note>(selected? `/notes/${selected.id}`:"/notes", selected? "PUT":"POST", draft);
     });
+    saving.current = false;
     if(!succeeded||!savedNote) {
+      failedDraft.current = JSON.stringify(draft);
       setSaveState("failed");
       return false;
     }
     const saved=savedNote;
+    failedDraft.current = null;
     setNotes(previous => [saved, ...previous.filter(note => note.id!==saved.id)]);
     setSelected(saved);
     setDraft({ title: saved.title, content: saved.content });
     setSaveState("saved");
-    actions.setNotice("已保存，灵感不会走丢。");
     return true;
   }, [actions, draft, enabled, selected]);
+  useEffect(() => {
+    if (!enabled || composing || actions.busy || actions.confirm || !dirty || !draft.title.trim()
+      || failedDraft.current === JSON.stringify(draft)) return;
+    const timer = window.setTimeout(() => void save(), 1500);
+    return () => window.clearTimeout(timer);
+  }, [draft, dirty, enabled, composing, actions.busy, actions.confirm, save]);
   function guard(action: () => void) {
     if(actions.busy)
       return;
@@ -111,6 +129,6 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
     });
   }
   const visibleNotes=notes.filter(note => `${note.title} ${note.content}`.toLowerCase().includes(query.toLowerCase()));
-  return { notes, selected, draft, setDraft, query, setQuery, dirty, saveState, editorOpen, setEditorOpen, select, initialize, guard, save, deleteNote, visibleNotes };
+  return { notes, selected, draft, setDraft, query, setQuery, dirty, saveState, editorOpen, setEditorOpen, select, initialize, guard, save, deleteNote, visibleNotes, setComposing };
 }
 export type NotesModel=ReturnType<typeof useNotes>;
