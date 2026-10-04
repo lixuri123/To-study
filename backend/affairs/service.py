@@ -72,6 +72,10 @@ def create(data: AffairInput, db: DB, user: Account, commit=True, actor="user"):
 
 def edit(item_id: str, data: AffairUpdate, db: DB, user: Account, commit=True, actor="user"):
     item = owned(db, Affair, item_id, user.id)
+    if "window_rule" not in data.model_fields_set and item.payload.get("window_rule"):
+        data = AffairUpdate.model_validate({**data.model_dump(), "window_rule": item.payload["window_rule"],
+            "reminders": [*data.model_dump(mode="json")["reminders"],
+                          *[row for row in item.payload.get("reminders", []) if row.get("window_key")]]})
     check_notes(db, user, data, item.payload.get("note_ids", []))
     payload = data.model_dump(mode="json", exclude={"version"})
     for field in ("pending_questions", "source_reviewed_version", "monitor"):

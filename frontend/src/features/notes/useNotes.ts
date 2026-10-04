@@ -49,6 +49,7 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
     }
     setSaveState("saving");
     saving.current = true;
+    const snapshot = { ...draft };
     let savedNote: Note|undefined;
     const succeeded=await actions.run(async () => {
       if (selected) {
@@ -56,7 +57,7 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
         if (!current || current.updated_at !== selected.updated_at || current.content !== selected.content || current.title !== selected.title)
           throw new Error("这篇笔记已在其他页面修改或删除。草稿已保留，请复制草稿后刷新核对。");
       }
-      savedNote=await api<Note>(selected? `/notes/${selected.id}`:"/notes", selected? "PUT":"POST", draft);
+      savedNote=await api<Note>(selected? `/notes/${selected.id}`:"/notes", selected? "PUT":"POST", snapshot);
     });
     saving.current = false;
     if(!succeeded||!savedNote) {
@@ -68,7 +69,9 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
     failedDraft.current = null;
     setNotes(previous => [saved, ...previous.filter(note => note.id!==saved.id)]);
     setSelected(saved);
-    setDraft({ title: saved.title, content: saved.content });
+    setDraft(current => current.title === snapshot.title && current.content === snapshot.content
+      ? { title: saved.title, content: saved.content }
+      : current);
     setSaveState("saved");
     return true;
   }, [actions, draft, enabled, selected]);

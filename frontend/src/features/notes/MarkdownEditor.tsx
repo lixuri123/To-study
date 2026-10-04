@@ -75,10 +75,13 @@ export function MarkdownEditor({ value, onChange, disabled, mode, documentId, on
   }, [editor, disabled, mode, sourceOnly]);
   useEffect(() => {
     if (!editor) return;
-    if (lastDocument.current !== documentId || (value !== lastEmitted.current && value !== editor.getMarkdown())) {
+    const documentChanged = lastDocument.current !== documentId;
+    if (documentChanged || (value !== lastEmitted.current && value !== editor.getMarkdown())) {
       lastDocument.current = documentId;
-      editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
-      lastEmitted.current = null;
+      if (value !== lastEmitted.current && value !== editor.getMarkdown()) {
+        editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
+        lastEmitted.current = null;
+      }
     }
   }, [editor, documentId, value]);
   const active = useEditorState({ editor, selector: ({ editor: current }) => ({

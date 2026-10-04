@@ -9,7 +9,7 @@ import { useTasks } from "../features/tasks/useTasks";
 import { useWorkspaceActions } from "./useWorkspaceActions";
 import { useDesktopCloseGuard } from "../desktop/useDesktopClose";
 import { AffairsPanel } from "../features/affairs/AffairsPanel";
-import { blankAffair, useAffairs } from "../features/affairs/useAffairs";
+import { blankAffair, snoozeReminder, useAffairs } from "../features/affairs/useAffairs";
 import { TimetablePanel } from "../features/timetable/TimetablePanel";
 import { useDesktopNotifications } from "../desktop/useDesktopNotifications";
 import { GoalsPanel } from "../features/goals/GoalsPanel";
@@ -127,7 +127,7 @@ export function Workspace({ user, onLogout, active = true }: {
           </span>
         </button>
         <button className={view==="goals"? "nav-item active":"nav-item"} onClick={() => guard(() => setView("goals"))} disabled={navigationBusy}>
-          <Target size={19} />我的目标<span>{goalsModel.goals.filter(goal => !goal.archived_at && !goal.summary.attained).length.toString().padStart(2, "0")}</span>
+          <Target size={19} />计划与目标<span>{goalsModel.goals.filter(goal => !goal.archived_at && !goal.summary.attained).length.toString().padStart(2, "0")}</span>
         </button>
       </nav>
       <div className="sidebar-quote">
@@ -161,7 +161,7 @@ export function Workspace({ user, onLogout, active = true }: {
           </button>
           <span>
             个人工作台 <span className="slash">/</span>{" "}
-            {view==="notes"? "笔记":view === "affairs" ? "信息与事务" : view === "timetable" ? "课表" : view === "goals" ? "目标" : "待办"}
+            {view==="notes"? "笔记":view === "affairs" ? "信息与事务" : view === "timetable" ? "课表" : view === "goals" ? "计划与目标" : "待办"}
           </span>
         </div>
         <span className="today">
@@ -177,15 +177,15 @@ export function Workspace({ user, onLogout, active = true }: {
           <span className="eyebrow">
             {view==="notes"
               ? "COLLECT YOUR THOUGHTS"
-              : view === "timetable" ? "A WEEK OF LEARNING" : view === "goals" ? "GOALS & PROGRESS" : "ONE THING AT A TIME"}
+              : view === "timetable" ? "A WEEK OF LEARNING" : view === "goals" ? "PLANS & GOALS" : "ONE THING AT A TIME"}
           </span>
           <h1>
-            {view==="notes"? "想法，在这里生长。":view === "affairs" ? "重要的事，都有着落。" : view === "timetable" ? "每一周，学有所获。" : view === "goals" ? "想做成的事，一步步抵达。" : "一步一步，慢慢来。"}
+            {view==="notes"? "想法，在这里生长。":view === "affairs" ? "重要的事，都有着落。" : view === "timetable" ? "每一周，学有所获。" : view === "goals" ? "把计划放进日历，留下走过的每一步。" : "一步一步，慢慢来。"}
           </h1>
           <p>
             {view==="notes"
               ? "记录灵感、日常与值得记住的小事。"
-              : view === "timetable" ? "跟着教学周，安排好每一次学习。" : view === "goals" ? "把长期结果拆成清楚、可验证的条件。" : "把大大的计划，变成今天的小小行动。"}
+              : view === "timetable" ? "跟着教学周，安排好每一次学习。" : view === "goals" ? "安排这一周，记录真实进展，也回看长期目标。" : "把大大的计划，变成今天的小小行动。"}
           </p>
         </div>
         <span className="heading-mark" aria-hidden="true">
@@ -200,14 +200,14 @@ export function Workspace({ user, onLogout, active = true }: {
       {notice&&(<div className="notice" role="status">
         {notice}
       </div>)}
-      {!!affairsModel.due.length && <section className="affair-reminders" aria-label="到期提醒"><h3>待处理提醒 · {affairsModel.due.length}</h3>{affairsModel.due.map(({item, reminder, index}) => <div className="affair-toolbar" key={`${item.id}-${index}`}><span><strong>{item.title}</strong> · {reminder.label} · {new Date(reminder.at).toLocaleString("zh-CN")}</span><Button variant="ghost" disabled={navigationBusy} onClick={() => guard(() => {setInitialAffair(item.id); setView("affairs");})}>查看</Button><Button variant="ghost" disabled={navigationBusy} onClick={() => void affairsModel.save({...item, reminders: item.reminders.map((r, i) => i === index ? {...r, anchor: "custom" as const, at: new Date(Date.now() + 3600000).toISOString()} : r)})}>一小时后</Button><Button variant="ghost" disabled={navigationBusy} onClick={() => void affairsModel.save({...item, reminders: item.reminders.map((r, i) => i === index ? {...r, acknowledged: true} : r)})}>我已知晓</Button><Button variant="ghost" disabled={navigationBusy} onClick={() => void affairsModel.save({...item, status: "completed"})}>完成事务</Button></div>)}</section>}
+      {!!affairsModel.due.length && <section className="affair-reminders" aria-label="到期提醒"><h3>待处理提醒 · {affairsModel.due.length}</h3>{affairsModel.due.map(({item, reminder, index}) => <div className="affair-toolbar" key={`${item.id}-${index}`}><span><strong>{item.title}</strong> · {reminder.label} · {new Date(reminder.at).toLocaleString("zh-CN")}</span><Button variant="ghost" disabled={navigationBusy} onClick={() => guard(() => {setInitialAffair(item.id); setView("affairs");})}>查看</Button><Button variant="ghost" disabled={navigationBusy} onClick={() => void affairsModel.save(snoozeReminder(item, index))}>一小时后</Button><Button variant="ghost" disabled={navigationBusy} onClick={() => void affairsModel.save({...item, reminders: item.reminders.map((r, i) => i === index ? {...r, acknowledged: true} : r)})}>我已知晓</Button><Button variant="ghost" disabled={navigationBusy} onClick={() => void affairsModel.save({...item, status: "completed"})}>完成事务</Button></div>)}</section>}
       {affairsModel.error && view !== "affairs" && <div className="error" role="alert">信息与事务：{affairsModel.error}<Button variant="ghost" onClick={() => void affairsModel.refresh()}>重试</Button></div>}
       {view === "notes" && notesModel.selected && <div className="affair-backlinks">{affairsModel.items.filter(item => item.note_ids.includes(notesModel.selected!.id)).map(item => <Button variant="ghost" key={item.id} disabled={navigationBusy} onClick={() => guard(() => {setInitialAffair(item.id); setView("affairs");})}>关联{item.kind === "affair" ? "事务" : "信息"}：{item.title}</Button>)}</div>}
       {view === "notes" && notesModel.selected && <Button variant="ghost" disabled={navigationBusy} onClick={createLinkedAffair}>从这篇笔记创建关联事务</Button>}
       {loading? (<div className="empty" role="status">
         <LoaderCircle className="spin" />
         正在整理你的空间…
-      </div>):view==="notes"? (<NotesPanel model={notesModel} busy={busy} focused={notesFocused} onToggleFocus={() => {setNotesFocused(value => !value); notesModel.setEditorOpen(true);}} />):view === "timetable" ? <TimetablePanel active={active} onDraftChange={setTimetableDirty} /> : view === "goals" ? <GoalsPanel model={goalsModel} onDraftChange={setGoalsDirty} /> : view === "affairs" ? <AffairsPanel model={affairsModel} notes={notes} initial={initialAffair} consumeInitial={() => setInitialAffair(null)} onDraftChange={setAffairDirty} openNote={note => {notesModel.select(note); setView("notes");}} createNote={async title => {let created: Note | undefined; await run(async () => {created = await api<Note>("/notes", "POST", {title, content: ""}); notesModel.initialize([created, ...notes]);}); return created;}} /> : (<TasksPanel model={tasksModel} busy={busy} />)}
+      </div>):view==="notes"? (<NotesPanel model={notesModel} busy={busy} focused={notesFocused} onToggleFocus={() => {setNotesFocused(value => !value); notesModel.setEditorOpen(true);}} />):view === "timetable" ? <TimetablePanel active={active} onDraftChange={setTimetableDirty} /> : view === "goals" ? <GoalsPanel affairs={affairsModel.items} onOpenAffair={id => {if (!navigationBusy) {setInitialAffair(id); setView("affairs");}}} model={goalsModel} onDraftChange={setGoalsDirty} tasksModel={tasksModel} notes={notes} /> : view === "affairs" ? <AffairsPanel model={affairsModel} notes={notes} initial={initialAffair} consumeInitial={() => setInitialAffair(null)} onDraftChange={setAffairDirty} openNote={note => {notesModel.select(note); setView("notes");}} createNote={async title => {let created: Note | undefined; await run(async () => {created = await api<Note>("/notes", "POST", {title, content: ""}); notesModel.initialize([created, ...notes]);}); return created;}} /> : (<TasksPanel model={tasksModel} busy={busy} />)}
       <footer className="page-footer">
         <Leaf size={13} /> 青笺 · 给思绪一点留白
       </footer>

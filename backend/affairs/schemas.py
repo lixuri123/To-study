@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..common.schemas import Title
+from .window import WindowRule, generate_window
 
 
 class Attachment(BaseModel):
@@ -32,10 +33,14 @@ class Reminder(BaseModel):
     anchor: Literal["custom", "starts_at", "ends_at"] = "custom"
     offset_minutes: int = Field(default=0, ge=0, le=525600)
     timezone_offset: int = Field(default=-480, ge=-840, le=840)
+    window_key: str = Field(default="", max_length=40)
+    expires_at: datetime | None = None
 
-    @field_validator("at")
+    @field_validator("at", "expires_at")
     @classmethod
     def timezone_required(cls, value):
+        if value is None:
+            return value
         if value.tzinfo is None:
             raise ValueError("提醒需要明确时区")
         return value
@@ -95,7 +100,8 @@ class AffairInput(BaseModel):
     source_reviewed_version: int = Field(default=0, ge=0)
     monitor: MonitorStatus | None = None
     note_ids: list[str] = Field(default_factory=list, max_length=100)
-    reminders: list[Reminder] = Field(default_factory=list, max_length=50)
+    reminders: list[Reminder] = Field(default_factory=list, max_length=416)
+    window_rule: WindowRule | None = None
     completion_criteria: str = Field(default="", max_length=2000)
     proof: str = Field(default="", max_length=10000)
     attachments: list[Attachment] = Field(default_factory=list, max_length=3)
@@ -140,6 +146,10 @@ class AffairInput(BaseModel):
             else:
                 base = datetime.fromisoformat(value.replace("Z", "+00:00"))
             reminder.at = base - timedelta(minutes=reminder.offset_minutes)
+        if self.window_rule:
+            self.reminders = generate_window(self.window_rule, self.starts_at, self.ends_at, self.reminders, Reminder)
+        else:
+            self.reminders = [row for row in self.reminders if not row.window_key]
         return self
 
 

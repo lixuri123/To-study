@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 
-export interface Reminder { repeat_minutes?: number; repeat_limit?: number; at: string; label: string; acknowledged: boolean; anchor?: "custom" | "starts_at" | "ends_at"; offset_minutes?: number; timezone_offset?: number }
+export interface Reminder { repeat_minutes?: number; repeat_limit?: number; at: string; label: string; acknowledged: boolean; anchor?: "custom" | "starts_at" | "ends_at"; offset_minutes?: number; timezone_offset?: number; window_key?: string; expires_at?: string | null }
+export interface WindowRule { clock: string; timezone_offset: number; on_start: boolean; before_days: number[]; every_days: number | null }
 export interface Affair {
   id: string; version: number; title: string; kind: "information" | "affair";
   status: "inbox" | "pending" | "doing" | "completed" | "cancelled";
   original: string; summary: string; source_name: string; source_url: string;
   published_at: string; starts_at: string; ends_at: string; time_uncertain: boolean;
   note_ids: string[]; reminders: Reminder[]; completion_criteria: string; proof: string;
+  window_rule?: WindowRule | null;
   created_at: string; updated_at: string;
   attachments?: {name: string; data: string}[];
   last_actor?: string;
@@ -23,6 +25,13 @@ export interface Affair {
 export const blankAffair = (): Affair => ({id: "", version: 0, title: "", kind: "information", status: "inbox", original: "", summary: "", source_name: "", source_url: "", published_at: "", starts_at: "", ends_at: "", time_uncertain: false, note_ids: [], reminders: [], completion_criteria: "", proof: "", created_at: "", updated_at: "", history: []});
 export function instant(value: string, end = false) {
   return new Date(value.length === 10 ? `${value}T${end ? "23:59:59" : "00:00:00"}` : value).getTime();
+}
+export function snoozeReminder(item: Affair, index: number): Affair {
+  const reminder = item.reminders[index];
+  const later = { ...reminder, at: new Date(Date.now() + 3600000).toISOString(), anchor: "custom" as const, window_key: "", acknowledged: false };
+  return { ...item, reminders: reminder.window_key
+    ? [...item.reminders.map((row, position) => position === index ? { ...row, acknowledged: true } : row), later]
+    : item.reminders.map((row, position) => position === index ? later : row) };
 }
 export function phase(item: Affair, now: number) {
   if (item.status === "completed") return "已完成";
@@ -69,7 +78,7 @@ export function useAffairs(active: boolean) {
     } catch (e) { setError(e instanceof Error ? e.message : "保存失败"); }
     finally { saving.current = false; setBusy(false); }
   }
-  const due = active ? items.flatMap(item => item.status === "completed" || item.status === "cancelled" ? [] : item.reminders.flatMap((reminder, index) => !reminder.acknowledged && instant(reminder.at) <= clock ? [{item, reminder, index}] : [])) : [];
+  const due = active ? items.flatMap(item => item.status === "completed" || item.status === "cancelled" ? [] : item.reminders.flatMap((reminder, index) => !reminder.acknowledged && (!reminder.expires_at || instant(reminder.expires_at) >= clock) && instant(reminder.at) <= clock ? [{item, reminder, index}] : [])) : [];
   return {items, error, busy, clock, due, refresh, save};
 }
 export type AffairsModel = ReturnType<typeof useAffairs>;

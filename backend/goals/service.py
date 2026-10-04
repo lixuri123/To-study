@@ -482,6 +482,9 @@ def set_lifecycle(
 
 def delete_empty_goal(db: Session, user_id: str, goal_id: str):
     goal = owned_goal(db, user_id, goal_id)
+    from ..plans.models import Plan
+    if db.scalar(select(Plan.id).where(Plan.goal_id == goal_id)):
+        raise HTTPException(409, "目标关联了计划，请先解除关联或归档目标")
     has_completed_checklist = any(
         item.completed_on is not None
         for block in goal.blocks

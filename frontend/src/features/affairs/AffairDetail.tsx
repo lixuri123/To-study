@@ -7,7 +7,7 @@ import { phase, type Affair } from "./useAffairs";
 export function displayTime(value: string) {return value.length===10 ? value : value ? new Date(value).toLocaleString("zh-CN",{hour12:false}) : "待确认";}
 
 export function AffairDetail({item, items, select, notes, clock, busy, edit, save, openNote}: {item: Affair; items: Affair[]; select: (item: Affair) => void; notes: Note[]; clock: number; busy: boolean; edit: () => void; save: (item: Affair) => Promise<unknown>; openNote: (note: Note) => void}) {
-  const pending = item.reminders.filter(r=>!r.acknowledged).sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
+  const pending = item.reminders.filter(r=>!r.acknowledged && (!r.expires_at || Date.parse(r.expires_at) >= clock)).sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
   const related = item.kind === "information" ? items.filter(x=>x.source_information_id===item.id) : [];
   const noteIds = [...new Set([item,...related].flatMap(x=>x.note_ids))];
   const done=["completed","cancelled"].includes(item.status);

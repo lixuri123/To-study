@@ -42,6 +42,8 @@ def claim(data: Claim, db: DB, user: Account):
         for reminder in affair.payload.get("reminders", []):
             if reminder.get("acknowledged"):
                 continue
+            if reminder.get("expires_at") and datetime.fromisoformat(reminder["expires_at"].replace("Z", "+00:00")).timestamp() < now:
+                continue
             at = datetime.fromisoformat(reminder["at"].replace("Z", "+00:00"))
             if at.timestamp() > now:
                 continue

@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from ..common.models import now
@@ -23,5 +23,8 @@ def save_note(db: Session, user_id: str, data: NoteInput, item_id: str | None = 
 
 
 def delete_note(db: Session, user_id: str, item_id: str):
-    db.delete(owned(db, Note, item_id, user_id))
+    note = owned(db, Note, item_id, user_id)
+    from ..plans.models import PlanCheckin
+    db.execute(update(PlanCheckin).where(PlanCheckin.note_id == note.id).values(note_id=None))
+    db.delete(note)
     db.commit()

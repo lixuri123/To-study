@@ -21,6 +21,7 @@ from .timetable.models import Course, TimetableSettings
 from .timetable.schemas import CourseInput, SettingsInput
 from .agent.models import Receipt, Profile
 from .agent.schemas import ProfileData
+from .plans.backup import export_graph, validate_graph, restore_graph
 
 router = APIRouter(prefix="/api/backup", tags=["backup"])
 DB = Annotated[Session, Depends(db_session)]
@@ -37,7 +38,8 @@ def export(db: DB, user: Account):
         return db.scalars(select(model).where(model.user_id == user.id)).all()
     settings = db.get(TimetableSettings, user.id)
     profile = db.get(Profile, user.id)
-    return {"format": "qingjian-1", "exported_at": now(), "notes": [{"id": r.id, "title": r.title, "content": r.content} for r in rows(Note)], "tasks": [{"id": r.id, "title": r.title, "completed": r.completed, "due_date": r.due_date.isoformat() if r.due_date else None} for r in rows(Task)], "affairs": [{"id": r.id, **r.payload} for r in rows(Affair)], "courses": [{"id": r.id, **r.payload} for r in rows(Course)], "settings": {"week_one_monday": settings.week_one_monday.isoformat() if settings.week_one_monday else None, "total_weeks": settings.total_weeks} if settings else None, "profile": profile.payload if profile else None}
+    graph = export_graph(db, user.id)
+    return {**graph, "format": "qingjian-1", "exported_at": now(), "notes": [{"id": r.id, "title": r.title, "content": r.content} for r in rows(Note)], "tasks": [{"id": r.id, "title": r.title, "completed": r.completed, "due_date": r.due_date.isoformat() if r.due_date else None} for r in rows(Task)], "affairs": [{"id": r.id, **r.payload} for r in rows(Affair)], "courses": [{"id": r.id, **r.payload} for r in rows(Course)], "settings": {"week_one_monday": settings.week_one_monday.isoformat() if settings.week_one_monday else None, "total_weeks": settings.total_weeks} if settings else None, "profile": profile.payload if profile else None}
 
 
 class Restore(BaseModel):
@@ -66,6 +68,7 @@ def restore(data: Restore, db: DB, user: Account):
             ids = [key for key, _ in prepared[kind]]
             if any(not isinstance(key, str) for key in ids) or len(set(ids)) != len(ids):
                 raise ValueError()
+        validate_graph(archive, prepared)
         settings = SettingsInput.model_validate(archive["settings"]) if archive.get("settings") else None
         profile = ProfileData.model_validate(archive["profile"]) if archive.get("profile") else None
         note_ids = {key for key, _ in prepared["notes"]}
@@ -111,6 +114,7 @@ def restore(data: Restore, db: DB, user: Account):
             payload["last_actor"] = "restore"
             source_key = hashlib.sha256(canonical_url(item.source_url).encode()).hexdigest() if item.kind == "information" and item.source_url else None
             db.add(Affair(id=mapping["affairs"][key], user_id=user.id, source_key=source_key, payload=payload))
+        restore_graph(db, user.id, archive, prepared, mapping)
         if settings and not db.get(TimetableSettings, user.id):
             db.add(TimetableSettings(user_id=user.id, **settings.model_dump(exclude={"version"})))
         if profile and not db.get(Profile, user.id):

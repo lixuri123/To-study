@@ -3,3 +3,8 @@
 .notice-context{margin:20px 0;padding:20px;border:1px solid var(--border,#d9ded9);border-radius:12px;background:var(--surface,#f6f8f5)}
 .notice-context h3{margin:6px 0 14px}.notice-linked-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border,#d9ded9)}
 .notice-linked-row button{text-align:left;white-space:normal}.notice-linked-row small{flex-shrink:0}.notice-reminders,.notice-pending{margin:18px 0}.notice-reminders small{display:block;opacity:.7;margin-top:4px}.notice-pending{border-left:3px solid #a98140;padding-left:12px}.notice-receipt{display:grid;gap:4px;padding:10px 0;border-bottom:1px solid var(--border,#d9ded9)}.notice-receipt small{opacity:.7}.notice-context textarea{width:100%;min-height:150px;box-sizing:border-box;margin:10px 0;padding:12px;color:inherit;background:transparent;border:1px solid var(--border,#d9ded9);border-radius:8px}.notice-context details{margin-top:14px}.notice-context summary{cursor:pointer}
+.affair-window-settings { margin: 12px 0; padding: 10px 12px; border: 1px solid #dddace; border-radius: 8px; }
+.affair-window-settings > summary { cursor: pointer; color: #64836c; font-size: 13px; }
+.affair-window-settings > p { font-size: 12px; line-height: 1.6; }
+.affair-window-before { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; }
+.affair-window-before .affair-inline { margin: 0; }

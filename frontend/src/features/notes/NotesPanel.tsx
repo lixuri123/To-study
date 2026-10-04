@@ -112,8 +112,8 @@ export function NotesPanel({ model, busy, focused = false, onToggleFocus }: {
       </div>
       <div className="editor-paper-wrap">
       <div className="editor-paper" style={{ width: `min(100%, ${paperWidth}px)` }}>
-        <Input aria-label="笔记标题" className="note-title" placeholder="给想法起个名字…" value={draft.title} disabled={busy} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
-        <MarkdownEditor documentId={selected?.id ?? 'new'} onComposingChange={model.setComposing} mode={mode} value={draft.content} disabled={busy} onChange={(content) => setDraft({ ...draft, content })} />
+        <Input aria-label="笔记标题" className="note-title" placeholder="给想法起个名字…" value={draft.title} disabled={busy && saveState !== "saving"} onChange={(e) => setDraft(current => ({ ...current, title: e.target.value }))} />
+        <MarkdownEditor documentId={selected?.id ?? 'new'} onComposingChange={model.setComposing} mode={mode} value={draft.content} disabled={busy && saveState !== "saving"} onChange={(content) => setDraft(current => ({ ...current, content }))} />
         <button className="note-width-handle" type="button" aria-label="拖动调整写作区宽度" title="拖动调整写作区宽度" onPointerDown={resizePaper}><span /></button>
       </div>
       </div>

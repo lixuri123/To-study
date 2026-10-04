@@ -16,9 +16,12 @@ from .goals.models import (
     GoalProgressEntry,
 )
 from .reminders.models import Delivery
+from .plans.models import Plan, PlanCheckin
 
 __all__ = [
     "Delivery",
+    "Plan",
+    "PlanCheckin",
     "Goal",
     "GoalActivitySuggestion",
     "GoalBlock",
