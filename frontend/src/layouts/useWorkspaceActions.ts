@@ -11,13 +11,15 @@ export function useWorkspaceActions() {
     mounted.current=true;
     return () => { mounted.current=false; };
   }, []);
-  async function run(action: () => Promise<void>): Promise<boolean> {
+  async function run(action: () => Promise<void>, options: { quiet?: boolean } = {}): Promise<boolean> {
     if(running.current)
       return false;
     running.current=true;
-    setBusy(true);
-    setError("");
-    setNotice("");
+    if (!options.quiet) {
+      setBusy(true);
+      setError("");
+      setNotice("");
+    }
     try {
       await action();
       return true;
@@ -29,7 +31,7 @@ export function useWorkspaceActions() {
     }
     finally {
       running.current=false;
-      if(mounted.current)
+      if(mounted.current && !options.quiet)
         setBusy(false);
     }
   }

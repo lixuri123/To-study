@@ -8,10 +8,12 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
   const [draft, setDraft]=useState(blank);
   const [query, setQuery]=useState("");
   const [saveState, setSaveState]=useState<"idle"|"saving"|"saved"|"failed">("idle");
+  const [autoSaving, setAutoSaving] = useState(false);
   const [editorOpen, setEditorOpen]=useState(false);
   const [composing, setComposing] = useState(false);
   const saving = useRef(false);
   const failedDraft = useRef<string | null>(null);
+  const saveFailed = useRef(false);
   const dirty=draft.title!==(selected?.title??"")||draft.content!==(selected?.content??"");
   function select(note: Note|null) {
     if (saving.current) return;
@@ -39,7 +41,7 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
-  const save=useCallback(async (): Promise<boolean> => {
+  const save=useCallback(async (automatic = false): Promise<boolean> => {
     if(!enabled||actions.busy||saving.current)
       return false;
     if(!draft.title.trim()) {
@@ -48,6 +50,7 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
       return false;
     }
     setSaveState("saving");
+    setAutoSaving(automatic);
     saving.current = true;
     const snapshot = { ...draft };
     let savedNote: Note|undefined;
@@ -58,19 +61,25 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
           throw new Error("这篇笔记已在其他页面修改或删除。草稿已保留，请复制草稿后刷新核对。");
       }
       savedNote=await api<Note>(selected? `/notes/${selected.id}`:"/notes", selected? "PUT":"POST", snapshot);
-    });
+    }, { quiet: automatic });
     saving.current = false;
+    setAutoSaving(false);
     if(!succeeded||!savedNote) {
+      saveFailed.current = true;
       failedDraft.current = JSON.stringify(draft);
       setSaveState("failed");
       return false;
     }
     const saved=savedNote;
+    if (saveFailed.current) actions.setError("");
+    saveFailed.current = false;
     failedDraft.current = null;
-    setNotes(previous => [saved, ...previous.filter(note => note.id!==saved.id)]);
+    setNotes(previous => previous.some(note => note.id === saved.id)
+      ? previous.map(note => note.id === saved.id ? saved : note)
+      : [saved, ...previous]);
     setSelected(saved);
     setDraft(current => current.title === snapshot.title && current.content === snapshot.content
-      ? { title: saved.title, content: saved.content }
+      ? (current.title === saved.title && current.content === saved.content ? current : { title: saved.title, content: saved.content })
       : current);
     setSaveState("saved");
     return true;
@@ -78,11 +87,11 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
   useEffect(() => {
     if (!enabled || composing || actions.busy || actions.confirm || !dirty || !draft.title.trim()
       || failedDraft.current === JSON.stringify(draft)) return;
-    const timer = window.setTimeout(() => void save(), 1500);
+    const timer = window.setTimeout(() => void save(true), 1500);
     return () => window.clearTimeout(timer);
   }, [draft, dirty, enabled, composing, actions.busy, actions.confirm, save]);
   function guard(action: () => void) {
-    if(actions.busy)
+    if(actions.busy || saving.current)
       return;
     if(!dirty) {
       action();
@@ -115,7 +124,7 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
     return () => window.removeEventListener("keydown", keydown);
   }, [actions.busy, dirty, enabled, save]);
   function deleteNote() {
-    if(!selected)
+    if(!selected || saving.current)
       return;
     const id=selected.id;
     actions.setConfirm({
@@ -132,6 +141,6 @@ export function useNotes(actions: WorkspaceActions, enabled=true) {
     });
   }
   const visibleNotes=notes.filter(note => `${note.title} ${note.content}`.toLowerCase().includes(query.toLowerCase()));
-  return { notes, selected, draft, setDraft, query, setQuery, dirty, saveState, editorOpen, setEditorOpen, select, initialize, guard, save, deleteNote, visibleNotes, setComposing };
+  return { notes, selected, draft, setDraft, query, setQuery, dirty, saveState, autoSaving, editorOpen, setEditorOpen, select, initialize, guard, save, deleteNote, visibleNotes, setComposing };
 }
 export type NotesModel=ReturnType<typeof useNotes>;

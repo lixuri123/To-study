@@ -17,7 +17,7 @@ export function NotesPanel({ model, busy, focused = false, onToggleFocus }: {
     try { return Number(window.localStorage.getItem("qingjian:note-paper-width")) || 820; }
     catch { return 820; }
   });
-  const { notes, selected, draft, setDraft, query, setQuery, dirty, saveState, editorOpen, setEditorOpen, select, guard, save, deleteNote, visibleNotes }=model;
+  const { notes, selected, draft, setDraft, query, setQuery, dirty, saveState, autoSaving, editorOpen, setEditorOpen, select, guard, save, deleteNote, visibleNotes }=model;
   const [libraryHidden, setLibraryHidden] = useState(() => {
     try { return window.localStorage.getItem("qingjian:note-library-hidden") === "1"; }
     catch { return false; }
@@ -95,7 +95,7 @@ export function NotesPanel({ model, busy, focused = false, onToggleFocus }: {
             {libraryHidden ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
           </Button>
           <i className={saveState==="failed"?"dot failed":dirty? "dot dirty":"dot"} />
-          {saveState==="saving"?"正在保存…":saveState==="failed"?"保存失败":dirty? "有未保存的修改":selected? "已保存":"新的一页"}
+          {saveState==="saving" && !autoSaving?"正在保存…":saveState==="failed"?"保存失败":dirty? "有未保存的修改":selected? "已保存":"新的一页"}
         </span>
         <div>
           <MarkdownModes mode={mode} onChange={setMode} />
