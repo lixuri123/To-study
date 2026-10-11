@@ -16,6 +16,7 @@ export function useTasks(actions: WorkspaceActions) {
   const [filter, setFilter] = useState<TaskFilter>("全部");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskStartDate, setTaskStartDate] = useState("");
   const [pending, setPending] = useState<Set<string>>(() => new Set());
   const [errors, setErrors] = useState<Record<string, Retry>>({});
   const running = useRef(new Set<string>());
@@ -60,12 +61,14 @@ export function useTasks(actions: WorkspaceActions) {
     const title = taskTitle.trim();
     const enteredTitle = taskTitle;
     const enteredDate = taskDueDate;
+    const enteredStart = taskStartDate;
     if (!title) return;
     void request("new", async () => {
-      const task = await api<Task>("/tasks", "POST", { title, due_date: taskDueDate || null });
+      const task = await api<Task>("/tasks", "POST", { title, due_date: enteredDate || null, start_date: enteredStart || null });
       setTasks((previous) => [task, ...previous]);
       setTaskTitle(current => current === enteredTitle ? "" : current);
       setTaskDueDate(current => current === enteredDate ? "" : current);
+      setTaskStartDate(current => current === enteredStart ? "" : current);
     });
   }
 
@@ -125,7 +128,7 @@ export function useTasks(actions: WorkspaceActions) {
   const complete = tasks.filter((task) => task.completed).length;
   const due = tasks.filter(task => !task.completed).flatMap(task => (task.reminders ?? []).flatMap((reminder, index) => !reminder.acknowledged && Date.parse(reminder.at) <= clock && (!reminder.expires_at || Date.parse(reminder.expires_at) >= clock) ? [{task, reminder, index}] : []));
   return {
-    tasks, setTasks, filter, setFilter, taskTitle, setTaskTitle, taskDueDate, setTaskDueDate,
+    tasks, setTasks, filter, setFilter, taskTitle, setTaskTitle, taskDueDate, setTaskDueDate, taskStartDate, setTaskStartDate,
     visibleTasks, complete, pending, errors, today, hasPending: pending.size > 0,
     addTask, toggleTask, editTitle, editDueDate, deleteTask, retryTask, patchTask, due, acknowledge, snooze,
   };

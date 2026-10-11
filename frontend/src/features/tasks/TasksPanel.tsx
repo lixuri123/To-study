@@ -5,6 +5,7 @@ import type { Note, Task } from "../../api";
 import type { TasksModel } from "./useTasks";
 import "./tasks.css";
 import { TaskWindowEditor } from "./TaskWindowEditor";
+import { DeadlinePicker } from "./DeadlinePicker";
 
 function TaskRow({ task, model, busy, notes, openNote, onEditorChange }: { task: Task; model: TasksModel; busy: boolean; notes: Note[]; openNote: (note: Note) => void; onEditorChange: (id: string, open: boolean) => void }) {
   const [editing, setEditing] = useState(false);
@@ -17,7 +18,8 @@ function TaskRow({ task, model, busy, notes, openNote, onEditorChange }: { task:
   const tomorrow = new Date(`${model.today}T12:00:00`);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowKey = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth()+1).padStart(2,"0")}-${String(tomorrow.getDate()).padStart(2,"0")}`;
-  const dueLabel = !task.due_date ? "" : !task.completed && task.due_date < model.today ? "已逾期" : task.due_date === model.today ? "今天" : task.due_date === tomorrowKey ? "明天" : task.due_date;
+  const isRange = !!task.start_date && !!task.due_date && task.start_date < task.due_date;
+  const dueLabel = !task.due_date ? "" : !task.completed && task.due_date < model.today ? "已逾期" : isRange ? `${task.start_date} — ${task.due_date}` : task.due_date === model.today ? "今天" : task.due_date === tomorrowKey ? "明天" : task.due_date;
   function cancel() { setTitle(task.title); setEditing(false); }
   function save() {
     if (!title.trim()) return cancel();
@@ -37,21 +39,16 @@ function TaskRow({ task, model, busy, notes, openNote, onEditorChange }: { task:
         }}
       /> : <button className="task-title" disabled={disabled} onClick={() => { setTitle(task.title); setEditing(true); }}>{task.title}</button>}
       {dueLabel && <small className={`task-due-label ${dueLabel === "已逾期" ? "overdue" : ""}`}>{dueLabel}</small>}
-      {task.start_date && <small className="task-due-label">{task.start_date} 至 {task.due_date ?? "未设置截止"}{task.window_rule ? " · 已设提醒" : ""}</small>}
       {error && <span className="task-error" role="alert">{error.message}</span>}
     </div>
-    <input
-      className="task-date" type="date" aria-label={`${task.title}的截止日期`}
-      value={task.due_date ?? ""} disabled={disabled}
-      onChange={(event) => void model.editDueDate(task, event.target.value)}
-    />
-    <Button variant="ghost" aria-label={`${task.title}的时间与提醒`} disabled={disabled} onClick={() => setWindowOpen(value => !value)}><Clock3 size={16} /></Button>
+    <DeadlinePicker start={task.start_date} end={task.due_date} disabled={disabled} label={`${task.title}的截止日期`} onOpenChange={open => onEditorChange(`${task.id}-deadline`, open)} onSave={(start_date, due_date) => model.patchTask(task, {start_date, due_date, ...(!start_date || !due_date ? {window_rule: null} : {})})} />
+    <Button variant="ghost" aria-label={`${task.title}的提醒与笔记`} disabled={disabled} onClick={() => setWindowOpen(value => !value)}><Clock3 size={16} /></Button>
     {rowPending ? <LoaderCircle className="spin task-spinner" aria-label={`${task.title}处理中`} size={16} /> : error ? <Button variant="ghost" aria-label={`重试待办操作：${task.title}`} onClick={() => model.retryTask(task.id)}><RotateCcw size={16} /></Button> : <Button variant="ghost" aria-label={`删除待办：${task.title}`} disabled={busy} onClick={() => model.deleteTask(task)}><Trash2 size={16} /></Button>}
   </div>{windowOpen && <TaskWindowEditor key={`${task.id}:${task.start_date}:${task.due_date}`} task={task} model={model} notes={notes} onClose={() => setWindowOpen(false)} />}{!windowOpen && !!task.note_ids?.length && <div className="task-linked-notes">{task.note_ids.map(id => {const note = notes.find(item => item.id === id); return note && <button key={id} disabled={disabled} onClick={() => openNote(note)}>{note.title} ↗</button>;})}</div>}</div>;
 }
 
 export function TasksPanel({ model, busy, notes, openNote, initial, consumeInitial, onDraftChange }: { model: TasksModel; busy: boolean; notes: Note[]; openNote: (note: Note) => void; initial: string | null; consumeInitial: () => void; onDraftChange: (dirty: boolean) => void }) {
-  const { tasks, filter, setFilter, taskTitle, setTaskTitle, taskDueDate, setTaskDueDate, visibleTasks, complete, addTask } = model;
+  const { tasks, filter, setFilter, taskTitle, setTaskTitle, taskDueDate, setTaskDueDate, taskStartDate, setTaskStartDate, visibleTasks, complete, addTask } = model;
   const addPending = model.pending.has("new");
   const [openEditors, setOpenEditors] = useState<Set<string>>(() => new Set());
   const onEditorChange = useCallback((id: string, open: boolean) => setOpenEditors(current => { if (current.has(id) === open) return current; const next = new Set(current); if (open) next.add(id); else next.delete(id); return next; }), []);
@@ -63,12 +60,12 @@ export function TasksPanel({ model, busy, notes, openNote, initial, consumeIniti
     <form className="task-add" onSubmit={(event) => { event.preventDefault(); addTask(); }}>
       <Plus size={20} />
       <Input aria-label="新待办" placeholder="添加一件想完成的小事…" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} disabled={busy || addPending} />
-      <Input className="task-new-date" type="date" aria-label="新待办截止日期" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} disabled={busy || addPending} />
-      <Button disabled={busy || addPending || !taskTitle.trim()}>{addPending ? <LoaderCircle size={16} className="spin" /> : null}添加待办</Button>
+      <DeadlinePicker newTask start={taskStartDate} end={taskDueDate} disabled={busy || addPending} label="新待办截止日期" onOpenChange={open => onEditorChange("new-deadline", open)} onSave={(start, end) => {setTaskStartDate(start ?? ""); setTaskDueDate(end ?? ""); return true;}} />
+      <Button disabled={busy || addPending || openEditors.size > 0 || !taskTitle.trim()}>{addPending ? <LoaderCircle size={16} className="spin" /> : null}添加待办</Button>
       {model.errors.new && <span className="task-error add-error" role="alert">{model.errors.new.message}<Button variant="ghost" type="button" onClick={() => model.retryTask("new")}>重试</Button></span>}
     </form>
     <div className="task-filters">
-      {(["全部", "未完成", "已完成", "今天", "已逾期"] as const).map((value) => <Button key={value} variant="ghost" aria-pressed={filter === value} className={filter === value ? "chosen" : ""} onClick={() => setFilter(value)}>{value}</Button>)}
+      {(["全部", "未完成", "已完成", "今天", "已逾期"] as const).map((value) => <Button key={value} variant="ghost" aria-pressed={filter === value} className={filter === value ? "chosen" : ""} disabled={openEditors.size > 0} onClick={() => setFilter(value)}>{value}</Button>)}
     </div>
     <div className="task-list">
       {visibleTasks.map((task) => <TaskRow task={task} model={model} busy={busy} notes={notes} openNote={openNote} onEditorChange={onEditorChange} key={task.id} />)}

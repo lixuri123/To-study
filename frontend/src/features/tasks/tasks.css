@@ -31,3 +31,17 @@
 .task-window-notes label { display: flex; gap: 7px; margin-top: 8px; }
 .task-window-actions { display: flex; gap: 8px; margin-top: 12px; }
 .task-linked-notes { display: flex; gap: 8px; margin: 0 0 8px 31px; font-size: 11px; color: var(--muted); }
+.task-deadline { position: relative; flex: 0 0 140px; min-width: 0; }
+.task-add .task-new-deadline { flex-basis: 145px; }
+.task-deadline .task-deadline-trigger { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; min-height: 34px; }
+.task-deadline-popover { position: absolute; z-index: 30; top: calc(100% + 5px); right: 0; width: min(310px, calc(100vw - 40px)); padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #fffdf8; box-shadow: 0 6px 20px #35483216; color: #354832; }
+.task-deadline-popover fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.task-deadline-mode { display: flex; gap: 4px; margin-bottom: 12px; }
+.task-deadline-mode button { padding: 5px 10px; border-radius: 5px; font-size: 12px; }
+.task-deadline-mode button[aria-pressed="true"] { color: #41633c; background: #eaf1e5; }
+.task-deadline-popover label { display: grid; gap: 6px; font-size: 11px; }
+.task-deadline-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.task-deadline .task-deadline-popover input[type="date"] { width: 100%; min-width: 0; height: 34px; padding: 5px; border: 1px solid var(--line); border-radius: 5px; font-size: 11px; }
+.task-deadline-popover small { display: block; margin-top: 10px; font-size: 10px; color: var(--muted); }
+.task-deadline-actions { display: flex; gap: 4px; margin-top: 12px; }
+@media (max-width: 720px) { .task-row .task-deadline { margin-left: 31px; } }
