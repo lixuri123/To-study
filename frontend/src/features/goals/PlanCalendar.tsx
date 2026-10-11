@@ -6,8 +6,8 @@ import type { GoalsModel } from "./useGoals";
 import type { TasksModel } from "../tasks/useTasks";
 import { addDays, checkinOn, dayKey, monthEnd, monthStart, parseDay, planActive, scheduled, weekStart, weeklyDone, type Plan, type PlanInput, type Checkin } from "./planDates";
 import { usePlans } from "./usePlans";
-import { AffairRanges, rangeAffairs } from "./AffairRanges";
-import { phase, type Affair } from "../affairs/useAffairs";
+import { TaskRanges, rangeTasks } from "./TaskRanges";
+
 
 const weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const today = () => dayKey(new Date());
@@ -94,10 +94,10 @@ function CheckinForm({ plan, day, initial, notes, busy, onSave, onCancel }: {
   </form>;
 }
 
-export function PlanCalendar({ goals, tasksModel, notes, onOpenGoal, onDraftChange, affairs, onOpenAffair }: {
+export function PlanCalendar({ goals, tasksModel, notes, onOpenGoal, onDraftChange, onOpenTask }: {
   goals: GoalsModel["goals"]; tasksModel: TasksModel; notes: Note[]; onOpenGoal: (id: string) => void;
   onDraftChange: (locked: boolean) => void;
-  affairs: Affair[]; onOpenAffair: (id: string) => void;
+  onOpenTask: (id: string) => void;
 }) {
   const [anchor, setAnchor] = useState(today);
   const [selectedDay, setSelectedDay] = useState(today);
@@ -143,7 +143,7 @@ export function PlanCalendar({ goals, tasksModel, notes, onOpenGoal, onDraftChan
         {days.map((day, index) => {
           const entries = plans.filter(plan => !!status(plan, day) && (plan.kind !== "weekly" || !!checkinOn(plan, day)));
           const dueTasks = tasksModel.tasks.filter(task => task.due_date === day && !task.completed).length;
-          return <Fragment key={day}>{index % 7 === 0 && <AffairRanges items={affairs} week={day} disabled={locked} onOpen={onOpenAffair} />}<button type="button" style={{ borderRightWidth: index % 7 === 6 ? 0 : 1 }} className={`plan-day${day === selectedDay ? " selected" : ""}${day === today() ? " today" : ""}${view === "month" && day.slice(0, 7) !== anchor.slice(0, 7) ? " outside" : ""}`} disabled={locked} onClick={() => { setSelectedDay(day); setEditingCheckin(null); }}>
+          return <Fragment key={day}>{index % 7 === 0 && <TaskRanges items={tasksModel.tasks} week={day} disabled={locked} onOpen={onOpenTask} />}<button type="button" style={{ borderRight: index % 7 === 6 ? "0" : "1px solid #e5ebe1" }} className={`plan-day${day === selectedDay ? " selected" : ""}${day === today() ? " today" : ""}${view === "month" && day.slice(0, 7) !== anchor.slice(0, 7) ? " outside" : ""}`} disabled={locked} onClick={() => { setSelectedDay(day); setEditingCheckin(null); }}>
             <time dateTime={day}>{Number(day.slice(-2))}</time>
             <div className="plan-day-items">{entries.slice(0, view === "month" ? 2 : 4).map(plan => <span key={plan.id} className={`plan-day-chip ${status(plan, day)}`}>{plan.title}</span>)}{entries.length > (view === "month" ? 2 : 4) && <small>还有 {entries.length - (view === "month" ? 2 : 4)} 项</small>}{dueTasks > 0 && <span className="plan-day-task"><ListTodo size={11} />{dueTasks} 项待办截止</span>}</div>
           </button></Fragment>;
@@ -151,7 +151,7 @@ export function PlanCalendar({ goals, tasksModel, notes, onOpenGoal, onDraftChan
       </div>
       <section className="plan-day-detail" aria-label={`${selectedDay}的安排`}>
         <div className="plan-day-head"><div><span className="eyebrow">SELECTED DAY</span><h3>{formatDay(selectedDay, { month: "long", day: "numeric", weekday: "long" })}</h3></div><span>{selectedDay === today() ? "今天" : selectedDay}</span></div>
-        {rangeAffairs(affairs, selectedDay, selectedDay).map(item => <button key={item.id} disabled={locked} className="plan-affair-day-link" onClick={() => onOpenAffair(item.id)}><strong>{item.title}</strong><small>办理时间段 · {phase(item, Date.now())} ↗</small></button>)}
+        {rangeTasks(tasksModel.tasks, selectedDay, selectedDay).map(item => <button key={item.id} disabled={locked} className="plan-affair-day-link" onClick={() => onOpenTask(item.id)}><strong>{item.title}</strong><small>待办时间段 · {item.completed ? "已完成" : "未完成"} ↗</small></button>)}
         {dayPlans.map(plan => {
           const record = checkinOn(plan, selectedDay);
           const goal = goals.find(item => item.id === plan.goal_id);

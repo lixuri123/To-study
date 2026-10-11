@@ -8,12 +8,12 @@ import { GoalList } from "./GoalList";
 import { PlanCalendar } from "./PlanCalendar";
 import type { TasksModel } from "../tasks/useTasks";
 import type { Note } from "../../api";
-import type { Affair } from "../affairs/useAffairs";
+
 import "./goals.css";
 
 type GoalMode = "list" | "detail" | "editor";
 
-export function GoalsPanel({ model, onDraftChange, tasksModel, notes, affairs, onOpenAffair }: { model: GoalsModel; onDraftChange: (dirty: boolean) => void; tasksModel: TasksModel; notes: Note[]; affairs: Affair[]; onOpenAffair: (id: string) => void }) {
+export function GoalsPanel({ model, onDraftChange, tasksModel, notes, onOpenTask }: { model: GoalsModel; onDraftChange: (dirty: boolean) => void; tasksModel: TasksModel; notes: Note[]; onOpenTask: (id: string) => void }) {
   const [tab, setTab] = useState<"calendar" | "records">("calendar");
   const [editorDirty, setEditorDirty] = useState(false);
   const [calendarLocked, setCalendarLocked] = useState(false);
@@ -39,6 +39,6 @@ export function GoalsPanel({ model, onDraftChange, tasksModel, notes, affairs, o
       <button role="tab" aria-selected={tab === "calendar"} disabled={editorDirty} title={editorDirty ? "请先保存或取消目标编辑" : undefined} onClick={() => setTab("calendar")}>计划日历</button>
       <button role="tab" aria-selected={tab === "records"} disabled={calendarLocked} onClick={() => setTab("records")}>目标档案</button>
     </div>
-    {tab === "calendar" ? <PlanCalendar affairs={affairs} onOpenAffair={onOpenAffair} goals={model.goals} tasksModel={tasksModel} notes={notes} onDraftChange={handleCalendarLock} onOpenGoal={async id => { const detail = await model.selectGoal(id); if (detail) { setMode("detail"); setTab("records"); } }} /> : archiveContent}
+    {tab === "calendar" ? <PlanCalendar onOpenTask={onOpenTask} goals={model.goals} tasksModel={tasksModel} notes={notes} onDraftChange={handleCalendarLock} onOpenGoal={async id => { const detail = await model.selectGoal(id); if (detail) { setMode("detail"); setTab("records"); } }} /> : archiveContent}
   </div>;
 }

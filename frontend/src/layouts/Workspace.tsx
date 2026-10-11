@@ -33,6 +33,8 @@ export function Workspace({ user, onLogout, active = true }: {
   const [timetableDirty, setTimetableDirty] = useState(false);
   const [goalsDirty, setGoalsDirty] = useState(false);
   const [initialAffair, setInitialAffair] = useState<string | null>(null);
+  const [initialTask, setInitialTask] = useState<string | null>(null);
+  const [tasksDirty, setTasksDirty] = useState(false);
   const [loading, setLoading]=useState(true);
   const actions=useWorkspaceActions();
   const { busy, error, notice, confirm, setConfirm, setError, run }=actions;
@@ -40,7 +42,7 @@ export function Workspace({ user, onLogout, active = true }: {
   const tasksModel=useTasks(actions);
   const { notes, guard }=notesModel;
   const { tasks }=tasksModel;
-  const navigationBusy = busy || tasksModel.hasPending || affairsModel.busy || goalsModel.busy || affairDirty || timetableDirty || goalsDirty;
+  const navigationBusy = busy || tasksModel.hasPending || affairsModel.busy || goalsModel.busy || affairDirty || timetableDirty || goalsDirty || tasksDirty;
   function toggleSidebar() {
     setSidebarHidden(hidden => {
       const next = !hidden;
@@ -53,11 +55,12 @@ export function Workspace({ user, onLogout, active = true }: {
     const open=(event:Event)=>{
       const id=(event as CustomEvent<string>).detail;
       if(!active||navigationBusy||typeof id!=="string")return;
+      if (tasksModel.tasks.some(task => task.id === id)) { guard(() => { setInitialTask(id); setView("tasks"); }); return; }
       guard(()=>{setInitialAffair(id);setView("affairs");void affairsModel.refresh();});
     };
     window.addEventListener("qingjian:open-affair",open);
     return()=>window.removeEventListener("qingjian:open-affair",open);
-  },[active,navigationBusy,guard]);
+  },[active,navigationBusy,guard,tasksModel.tasks]);
   function createLinkedAffair() {
     guard(() => {
       const note = notesModel.selected;
@@ -197,6 +200,7 @@ export function Workspace({ user, onLogout, active = true }: {
         {!loading&&(<Button variant="ghost" onClick={() => guard(() => void load())}>重试</Button>)}
       </div>)}
       {notificationStatus&&<div className="notification-status" role="status">{notificationStatus}</div>}
+      {!!tasksModel.due.length && <section className="affair-reminders" aria-label="待办提醒"><h3>待办提醒 · {tasksModel.due.length}</h3>{tasksModel.due.map(({task, reminder, index}) => <div className="affair-toolbar" key={`${task.id}-${index}`}><span><strong>{task.title}</strong> · {reminder.label}</span><Button variant="ghost" disabled={navigationBusy} onClick={() => guard(() => {setInitialTask(task.id); setView("tasks");})}>查看待办</Button><Button variant="ghost" disabled={navigationBusy} onClick={() => tasksModel.snooze(task, index)}>一小时后</Button><Button variant="ghost" disabled={navigationBusy} onClick={() => tasksModel.acknowledge(task, index)}>我已知晓</Button><Button variant="ghost" disabled={navigationBusy} onClick={() => tasksModel.toggleTask(task)}>完成待办</Button></div>)}</section>}
       {notice&&(<div className="notice" role="status">
         {notice}
       </div>)}
@@ -207,7 +211,7 @@ export function Workspace({ user, onLogout, active = true }: {
       {loading? (<div className="empty" role="status">
         <LoaderCircle className="spin" />
         正在整理你的空间…
-      </div>):view==="notes"? (<NotesPanel model={notesModel} busy={busy} focused={notesFocused} onToggleFocus={() => {setNotesFocused(value => !value); notesModel.setEditorOpen(true);}} />):view === "timetable" ? <TimetablePanel active={active} onDraftChange={setTimetableDirty} /> : view === "goals" ? <GoalsPanel affairs={affairsModel.items} onOpenAffair={id => {if (!navigationBusy) {setInitialAffair(id); setView("affairs");}}} model={goalsModel} onDraftChange={setGoalsDirty} tasksModel={tasksModel} notes={notes} /> : view === "affairs" ? <AffairsPanel model={affairsModel} notes={notes} initial={initialAffair} consumeInitial={() => setInitialAffair(null)} onDraftChange={setAffairDirty} openNote={note => {notesModel.select(note); setView("notes");}} createNote={async title => {let created: Note | undefined; await run(async () => {created = await api<Note>("/notes", "POST", {title, content: ""}); notesModel.initialize([created, ...notes]);}); return created;}} /> : (<TasksPanel model={tasksModel} busy={busy} />)}
+      </div>):view==="notes"? (<NotesPanel model={notesModel} busy={busy} focused={notesFocused} onToggleFocus={() => {setNotesFocused(value => !value); notesModel.setEditorOpen(true);}} />):view === "timetable" ? <TimetablePanel active={active} onDraftChange={setTimetableDirty} /> : view === "goals" ? <GoalsPanel onOpenTask={id => {if (!navigationBusy) {setInitialTask(id); setView("tasks");}}} model={goalsModel} onDraftChange={setGoalsDirty} tasksModel={tasksModel} notes={notes} /> : view === "affairs" ? <AffairsPanel model={affairsModel} notes={notes} initial={initialAffair} consumeInitial={() => setInitialAffair(null)} onDraftChange={setAffairDirty} openNote={note => {notesModel.select(note); setView("notes");}} createNote={async title => {let created: Note | undefined; await run(async () => {created = await api<Note>("/notes", "POST", {title, content: ""}); notesModel.initialize([created, ...notes]);}); return created;}} /> : (<TasksPanel onDraftChange={setTasksDirty} model={tasksModel} busy={busy} notes={notes} initial={initialTask} consumeInitial={() => setInitialTask(null)} openNote={note => {notesModel.select(note); setView("notes");}} />)}
       <footer className="page-footer">
         <Leaf size={13} /> 青笺 · 给思绪一点留白
       </footer>

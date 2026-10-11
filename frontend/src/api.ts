@@ -9,6 +9,10 @@ export interface Task {
   title: string;
   completed: boolean;
   due_date: string | null;
+  start_date?: string | null;
+  window_rule?: import("./features/affairs/useAffairs").WindowRule | null;
+  reminders?: import("./features/affairs/useAffairs").Reminder[];
+  note_ids?: string[];
   created_at: string;
 }
 export interface User {

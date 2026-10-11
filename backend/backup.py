@@ -13,7 +13,8 @@ from .common.models import identifier, now
 from .notes.models import Note
 from .notes.schemas import NoteInput
 from .tasks.models import Task
-from .tasks.schemas import TaskInput
+from .tasks.schemas import TaskInput, TaskOutput
+from .tasks.service import values as task_values
 from .affairs.models import Affair
 from .affairs.schemas import AffairInput
 from .affairs.sources import canonical_url
@@ -39,7 +40,7 @@ def export(db: DB, user: Account):
     settings = db.get(TimetableSettings, user.id)
     profile = db.get(Profile, user.id)
     graph = export_graph(db, user.id)
-    return {**graph, "format": "qingjian-1", "exported_at": now(), "notes": [{"id": r.id, "title": r.title, "content": r.content} for r in rows(Note)], "tasks": [{"id": r.id, "title": r.title, "completed": r.completed, "due_date": r.due_date.isoformat() if r.due_date else None} for r in rows(Task)], "affairs": [{"id": r.id, **r.payload} for r in rows(Affair)], "courses": [{"id": r.id, **r.payload} for r in rows(Course)], "settings": {"week_one_monday": settings.week_one_monday.isoformat() if settings.week_one_monday else None, "total_weeks": settings.total_weeks} if settings else None, "profile": profile.payload if profile else None}
+    return {**graph, "format": "qingjian-1", "exported_at": now(), "notes": [{"id": r.id, "title": r.title, "content": r.content} for r in rows(Note)], "tasks": [TaskOutput.model_validate(r).model_dump(mode="json") for r in rows(Task)], "affairs": [{"id": r.id, **r.payload} for r in rows(Affair)], "courses": [{"id": r.id, **r.payload} for r in rows(Course)], "settings": {"week_one_monday": settings.week_one_monday.isoformat() if settings.week_one_monday else None, "total_weeks": settings.total_weeks} if settings else None, "profile": profile.payload if profile else None}
 
 
 class Restore(BaseModel):
@@ -72,6 +73,8 @@ def restore(data: Restore, db: DB, user: Account):
         settings = SettingsInput.model_validate(archive["settings"]) if archive.get("settings") else None
         profile = ProfileData.model_validate(archive["profile"]) if archive.get("profile") else None
         note_ids = {key for key, _ in prepared["notes"]}
+        if any(set(item.note_ids) - note_ids for _, item in prepared["tasks"]):
+            raise ValueError()
         affairs = {key: item for key, item in prepared["affairs"]}
         for _, item in prepared["affairs"]:
             if set(item.note_ids) - note_ids or item.source_information_id and (item.source_information_id not in affairs or affairs[item.source_information_id].kind != "information"):
@@ -98,7 +101,11 @@ def restore(data: Restore, db: DB, user: Account):
         for key, item in prepared["notes"]:
             db.add(Note(id=mapping["notes"][key], user_id=user.id, **item.model_dump()))
         for key, item in prepared["tasks"]:
-            db.add(Task(id=mapping["tasks"][key], user_id=user.id, **item.model_dump()))
+            payload = task_values(item)
+            payload["note_ids"] = [mapping["notes"][note_id] for note_id in item.note_ids]
+            for reminder in payload["reminders"]:
+                reminder["acknowledged"] = True
+            db.add(Task(id=mapping["tasks"][key], user_id=user.id, **payload))
         for key, item in prepared["courses"]:
             db.add(Course(id=mapping["courses"][key], user_id=user.id, payload=item.model_dump(mode="json")))
         for key, item in prepared["affairs"]:

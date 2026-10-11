@@ -20,3 +20,14 @@
   .task-row { flex-wrap: wrap; }
   .task-date { margin-left: 31px; }
 }
+.task-window-editor { margin: 4px 0 12px 31px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #fafbf6; font-size: 12px; }
+.task-window-editor fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.task-window-dates { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 12px; }
+.task-window-dates label { display: grid; gap: 6px; }
+.task-window-editor input[type="date"], .task-window-editor input[type="time"], .task-window-editor select { width: 100%; min-height: 34px; border: 1px solid var(--line); border-radius: 5px; padding: 6px; background: #fffdf8; color: inherit; }
+.task-window-editor .affair-window-settings label { display: grid; gap: 6px; margin: 12px 0; }
+.task-window-editor .affair-window-settings .affair-inline { display: flex; align-items: center; gap: 6px; }
+.task-window-notes summary { cursor: pointer; }
+.task-window-notes label { display: flex; gap: 7px; margin-top: 8px; }
+.task-window-actions { display: flex; gap: 8px; margin-top: 12px; }
+.task-linked-notes { display: flex; gap: 8px; margin: 0 0 8px 31px; font-size: 11px; color: var(--muted); }

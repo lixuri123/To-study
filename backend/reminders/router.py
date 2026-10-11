@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from ..auth.models import User
 from ..auth.sessions import current_user
 from ..affairs.models import Affair
+from ..tasks.models import Task
 from ..common.models import identifier
 from ..database import db_session
 from .models import Delivery
@@ -36,10 +37,12 @@ class Ack(Claim):
 def claim(data: Claim, db: DB, user: Account):
     now = int(time.time())
     result = []
-    for affair in db.scalars(select(Affair).where(Affair.user_id == user.id)):
-        if affair.payload.get("status") in {"completed", "cancelled"}:
+    sources = [(item.id, item.payload, None) for item in db.scalars(select(Affair).where(Affair.user_id == user.id))]
+    sources += [(item.id, {"title": item.title, "status": "completed" if item.completed else "pending", "reminders": item.reminders, "ends_at": item.due_date.isoformat() if item.due_date else ""}, item.id) for item in db.scalars(select(Task).where(Task.user_id == user.id))]
+    for source_id, payload, task_id in sources:
+        if payload.get("status") in {"completed", "cancelled"}:
             continue
-        for reminder in affair.payload.get("reminders", []):
+        for reminder in payload.get("reminders", []):
             if reminder.get("acknowledged"):
                 continue
             if reminder.get("expires_at") and datetime.fromisoformat(reminder["expires_at"].replace("Z", "+00:00")).timestamp() < now:
@@ -49,7 +52,9 @@ def claim(data: Claim, db: DB, user: Account):
                 continue
             repeat = reminder.get("repeat_minutes", 0)
             occurrence = min(int((now - at.timestamp()) // (repeat * 60)), reminder.get("repeat_limit", 3) - 1) if repeat else 0
-            parts = [user.id, data.device_id, affair.id, reminder["at"], reminder.get("label", "提醒")]
+            parts = [user.id, data.device_id, source_id, reminder["at"], reminder.get("label", "提醒")]
+            if task_id:
+                parts.append("task")
             if occurrence:
                 parts.append(occurrence)
             fingerprint = json.dumps(parts, ensure_ascii=False)
@@ -58,7 +63,7 @@ def claim(data: Claim, db: DB, user: Account):
             if not row:
                 try:
                     with db.begin_nested():
-                        row = Delivery(id=delivery_id, user_id=user.id, device_id=data.device_id, affair_id=affair.id, label=reminder.get("label", "提醒"), updated_at=now)
+                        row = Delivery(id=delivery_id, user_id=user.id, device_id=data.device_id, affair_id=source_id, label=reminder.get("label", "提醒"), updated_at=now)
                         db.add(row)
                         db.flush()
                 except IntegrityError:
@@ -66,7 +71,7 @@ def claim(data: Claim, db: DB, user: Account):
             token = identifier()
             changed = db.execute(update(Delivery).where(Delivery.id == delivery_id, Delivery.state != "sent", Delivery.next_attempt <= now).values(state="sending", attempts=Delivery.attempts + 1, lease_token=token, next_attempt=now + 120, updated_at=now))
             if changed.rowcount:
-                result.append({"id": delivery_id, "lease_token": token, "affair_id": affair.id, "title": affair.payload["title"], "body": reminder.get("label", "提醒") + " · " + reminder["at"] + (" · 截止 " + affair.payload["ends_at"] if affair.payload.get("ends_at") else "") + "。请从托盘打开青笺查看。"})
+                result.append({"id": delivery_id, "lease_token": token, "affair_id": source_id, "task_id": task_id, "title": payload["title"], "body": reminder.get("label", "提醒") + " · " + reminder["at"] + (" · 截止 " + payload["ends_at"] if payload.get("ends_at") else "") + "。请从托盘打开青笺查看。"})
             if len(result) >= 3:
                 break
         if len(result) >= 3:

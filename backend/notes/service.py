@@ -26,5 +26,9 @@ def delete_note(db: Session, user_id: str, item_id: str):
     note = owned(db, Note, item_id, user_id)
     from ..plans.models import PlanCheckin
     db.execute(update(PlanCheckin).where(PlanCheckin.note_id == note.id).values(note_id=None))
+    from ..tasks.models import Task
+    for task in db.scalars(select(Task).where(Task.user_id == user_id)):
+        if note.id in task.note_ids:
+            task.note_ids = [key for key in task.note_ids if key != note.id]
     db.delete(note)
     db.commit()

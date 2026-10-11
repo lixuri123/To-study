@@ -20,8 +20,9 @@ export function useTasks(actions: WorkspaceActions) {
   const [errors, setErrors] = useState<Record<string, Retry>>({});
   const running = useRef(new Set<string>());
   const [today, setToday] = useState(localDate);
+  const [clock, setClock] = useState(Date.now());
   useEffect(() => {
-    const refresh = () => setToday(localDate());
+    const refresh = () => { setToday(localDate()); setClock(Date.now()); };
     const timer = window.setInterval(refresh, 60_000);
     window.addEventListener("focus", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
@@ -38,11 +39,13 @@ export function useTasks(actions: WorkspaceActions) {
     });
     try {
       await action();
+      return true;
     } catch (error) {
       setErrors((current) => ({
         ...current,
         [key]: { message: error instanceof Error ? error.message : "操作失败，请重试。", action },
       }));
+      return false;
     } finally {
       running.current.delete(key);
       setPending((current) => {
@@ -66,7 +69,7 @@ export function useTasks(actions: WorkspaceActions) {
     });
   }
 
-  function patchTask(task: Task, patch: Partial<Pick<Task, "title" | "completed" | "due_date">>) {
+  function patchTask(task: Task, patch: Partial<Pick<Task, "title" | "completed" | "due_date" | "start_date" | "window_rule" | "reminders" | "note_ids">>) {
     return request(task.id, async () => {
       const updated = await api<Task>(`/tasks/${task.id}`, "PATCH", patch);
       setTasks((previous) => previous.map((item) => item.id === task.id ? updated : item));
@@ -74,13 +77,22 @@ export function useTasks(actions: WorkspaceActions) {
   }
 
   function toggleTask(task: Task) { void patchTask(task, { completed: !task.completed }); }
+  function acknowledge(task: Task, index: number) {
+    void patchTask(task, { reminders: (task.reminders ?? []).map((row, position) => position === index ? {...row, acknowledged: true} : row) });
+  }
+  function snooze(task: Task, index: number) {
+    const reminders = task.reminders ?? [];
+    const row = reminders[index];
+    const later = {...row, at: new Date(Date.now() + 3600000).toISOString(), anchor: "custom" as const, window_key: "", acknowledged: false};
+    void patchTask(task, {reminders: row.window_key ? [...reminders.map((item, position) => position === index ? {...item, acknowledged: true} : item), later] : reminders.map((item, position) => position === index ? later : item)});
+  }
   function editTitle(task: Task, title: string) {
     const trimmed = title.trim();
     return !trimmed || trimmed === task.title ? Promise.resolve() : patchTask(task, { title: trimmed });
   }
   function editDueDate(task: Task, dueDate: string) {
     const value = dueDate || null;
-    return value === task.due_date ? Promise.resolve() : patchTask(task, { due_date: value });
+    return value === task.due_date ? Promise.resolve() : patchTask(task, { due_date: value, ...(!value ? {window_rule: null} : {}) });
   }
   function deleteTask(task: Task) {
     actions.setConfirm({
@@ -101,7 +113,7 @@ export function useTasks(actions: WorkspaceActions) {
   const visibleTasks = tasks.map((task, index) => ({ task, index })).filter(({ task }) => {
     if (filter === "未完成") return !task.completed;
     if (filter === "已完成") return task.completed;
-    if (filter === "今天") return !task.completed && task.due_date === today;
+    if (filter === "今天") return !task.completed && (task.due_date === today || !!task.start_date && task.start_date <= today && !!task.due_date && task.due_date >= today);
     if (filter === "已逾期") return !task.completed && !!task.due_date && task.due_date < today;
     return true;
   }).sort((a, b) => {
@@ -111,10 +123,11 @@ export function useTasks(actions: WorkspaceActions) {
     return a.index - b.index;
   }).map(({ task }) => task);
   const complete = tasks.filter((task) => task.completed).length;
+  const due = tasks.filter(task => !task.completed).flatMap(task => (task.reminders ?? []).flatMap((reminder, index) => !reminder.acknowledged && Date.parse(reminder.at) <= clock && (!reminder.expires_at || Date.parse(reminder.expires_at) >= clock) ? [{task, reminder, index}] : []));
   return {
     tasks, setTasks, filter, setFilter, taskTitle, setTaskTitle, taskDueDate, setTaskDueDate,
     visibleTasks, complete, pending, errors, today, hasPending: pending.size > 0,
-    addTask, toggleTask, editTitle, editDueDate, deleteTask, retryTask,
+    addTask, toggleTask, editTitle, editDueDate, deleteTask, retryTask, patchTask, due, acknowledge, snooze,
   };
 }
 export type TasksModel = ReturnType<typeof useTasks>;
