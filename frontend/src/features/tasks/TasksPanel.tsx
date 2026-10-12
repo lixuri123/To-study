@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { CheckCheck, Clock3, LoaderCircle, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCheck, Clock3, LayoutGrid, List, LoaderCircle, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { Button, Input } from "../../components/ui";
 import type { Note, Task } from "../../api";
 import type { TasksModel } from "./useTasks";
@@ -10,7 +10,7 @@ import { DeadlinePicker } from "./DeadlinePicker";
 function TaskRow({ task, model, busy, notes, openNote, onEditorChange }: { task: Task; model: TasksModel; busy: boolean; notes: Note[]; openNote: (note: Note) => void; onEditorChange: (id: string, open: boolean) => void }) {
   const [editing, setEditing] = useState(false);
   const [windowOpen, setWindowOpen] = useState(false);
-  useEffect(() => { onEditorChange(task.id, windowOpen); return () => onEditorChange(task.id, false); }, [windowOpen, task.id, onEditorChange]);
+  useEffect(() => { onEditorChange(task.id, windowOpen); return () => {onEditorChange(task.id, false); onEditorChange(`${task.id}-deadline`, false);} }, [windowOpen, task.id, onEditorChange]);
   const [title, setTitle] = useState(task.title);
   const rowPending = model.pending.has(task.id);
   const error = model.errors[task.id];
@@ -50,13 +50,16 @@ function TaskRow({ task, model, busy, notes, openNote, onEditorChange }: { task:
 export function TasksPanel({ model, busy, notes, openNote, initial, consumeInitial, onDraftChange }: { model: TasksModel; busy: boolean; notes: Note[]; openNote: (note: Note) => void; initial: string | null; consumeInitial: () => void; onDraftChange: (dirty: boolean) => void }) {
   const { tasks, filter, setFilter, taskTitle, setTaskTitle, taskDueDate, setTaskDueDate, taskStartDate, setTaskStartDate, visibleTasks, complete, addTask } = model;
   const addPending = model.pending.has("new");
+  const [view, setView] = useState<"cards" | "list">(() => {
+    try { return localStorage.getItem("qingjian:task-view") === "list" ? "list" : "cards"; } catch { return "cards"; }
+  });
+  function changeView(next: "cards" | "list") { setView(next); try {localStorage.setItem("qingjian:task-view", next);} catch { /* Storage may be unavailable. */ } }
   const [openEditors, setOpenEditors] = useState<Set<string>>(() => new Set());
   const onEditorChange = useCallback((id: string, open: boolean) => setOpenEditors(current => { if (current.has(id) === open) return current; const next = new Set(current); if (open) next.add(id); else next.delete(id); return next; }), []);
   useEffect(() => { onDraftChange(openEditors.size > 0); return () => onDraftChange(false); }, [openEditors, onDraftChange]);
-  useEffect(() => { if (initial) { model.setFilter("全部"); const timer = window.setTimeout(() => {document.getElementById(`task-${initial}`)?.scrollIntoView({block: "center", behavior: "smooth"}); consumeInitial();}, 0); return () => window.clearTimeout(timer); } }, [initial]);
-  return <section className="task-panel">
-    <div className="task-heading"><div><h2>今天也在前进</h2><p>已完成 {complete} / {tasks.length} 项</p></div><span>{tasks.length ? Math.round((complete / tasks.length) * 100) : 0}<small>%</small></span></div>
-    <div className="progress"><div style={{ width: `${tasks.length ? (complete / tasks.length) * 100 : 0}%` }} /></div>
+  useEffect(() => { if (initial) { model.setFilter(model.tasks.find(task => task.id === initial)?.completed ? "已完成" : "全部"); const timer = window.setTimeout(() => {document.getElementById(`task-${initial}`)?.scrollIntoView({block: "center", behavior: "smooth"}); consumeInitial();}, 0); return () => window.clearTimeout(timer); } }, [initial]);
+  return <section className={`task-panel task-view-${view}`}>
+    <div className="task-overview"><h2>待办清单</h2><p><strong>{tasks.length - complete}</strong> 项待处理 · {complete} 项已完成</p></div>
     <form className="task-add" onSubmit={(event) => { event.preventDefault(); addTask(); }}>
       <Plus size={20} />
       <Input aria-label="新待办" placeholder="添加一件想完成的小事…" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} disabled={busy || addPending} />
@@ -64,12 +67,12 @@ export function TasksPanel({ model, busy, notes, openNote, initial, consumeIniti
       <Button disabled={busy || addPending || openEditors.size > 0 || !taskTitle.trim()}>{addPending ? <LoaderCircle size={16} className="spin" /> : null}添加待办</Button>
       {model.errors.new && <span className="task-error add-error" role="alert">{model.errors.new.message}<Button variant="ghost" type="button" onClick={() => model.retryTask("new")}>重试</Button></span>}
     </form>
-    <div className="task-filters">
+    <div className="task-browse-toolbar"><div className="task-filters">
       {(["全部", "未完成", "已完成", "今天", "已逾期"] as const).map((value) => <Button key={value} variant="ghost" aria-pressed={filter === value} className={filter === value ? "chosen" : ""} disabled={openEditors.size > 0} onClick={() => setFilter(value)}>{value}</Button>)}
-    </div>
+    </div><div className="task-view-switch" role="group" aria-label="待办视图"><button type="button" aria-pressed={view === "cards"} disabled={openEditors.size > 0} onClick={() => changeView("cards")}><LayoutGrid size={14} />卡片</button><button type="button" aria-pressed={view === "list"} disabled={openEditors.size > 0} onClick={() => changeView("list")}><List size={14} />列表</button></div></div>
     <div className="task-list">
       {visibleTasks.map((task) => <TaskRow task={task} model={model} busy={busy} notes={notes} openNote={openNote} onEditorChange={onEditorChange} key={task.id} />)}
-      {!visibleTasks.length && <div className="empty"><CheckCheck size={32} /><h3>{filter === "已完成" ? "完成的事，会在这里相遇。" : filter === "未完成" ? "这一页，已经轻轻完成。" : "从一件小事开始。"}</h3><p>给自己一点时间，按自己的节奏来。</p></div>}
+      {!visibleTasks.length && <div className="empty task-empty"><CheckCheck size={24} /><h3>{filter === "已完成" ? "还没有已完成的待办" : "这里没有待处理的待办"}</h3>{filter !== "已完成" && complete > 0 && <p>已完成的 {complete} 项可在「已完成」中查看。</p>}</div>}
     </div>
   </section>;
 }

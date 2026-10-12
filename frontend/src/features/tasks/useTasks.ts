@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { api, type Task } from "../../api";
 import type { WorkspaceActions } from "../../layouts/useWorkspaceActions";
 
-export type TaskFilter = "全部" | "未完成" | "已完成" | "今天" | "已逾期";
+import { selectTasks, type TaskFilter } from "./taskViews";
+export type { TaskFilter } from "./taskViews";
 type Retry = { message: string; action: () => Promise<void> };
 
 function localDate() {
@@ -113,18 +114,7 @@ export function useTasks(actions: WorkspaceActions) {
     if (retry) void request(key, retry.action);
   }
 
-  const visibleTasks = tasks.map((task, index) => ({ task, index })).filter(({ task }) => {
-    if (filter === "未完成") return !task.completed;
-    if (filter === "已完成") return task.completed;
-    if (filter === "今天") return !task.completed && (task.due_date === today || !!task.start_date && task.start_date <= today && !!task.due_date && task.due_date >= today);
-    if (filter === "已逾期") return !task.completed && !!task.due_date && task.due_date < today;
-    return true;
-  }).sort((a, b) => {
-    if (a.task.completed !== b.task.completed) return a.task.completed ? 1 : -1;
-    if (!!a.task.due_date !== !!b.task.due_date) return a.task.due_date ? -1 : 1;
-    if (a.task.due_date !== b.task.due_date) return (a.task.due_date ?? "").localeCompare(b.task.due_date ?? "");
-    return a.index - b.index;
-  }).map(({ task }) => task);
+  const visibleTasks = selectTasks(tasks, filter, today);
   const complete = tasks.filter((task) => task.completed).length;
   const due = tasks.filter(task => !task.completed).flatMap(task => (task.reminders ?? []).flatMap((reminder, index) => !reminder.acknowledged && Date.parse(reminder.at) <= clock && (!reminder.expires_at || Date.parse(reminder.expires_at) >= clock) ? [{task, reminder, index}] : []));
   return {

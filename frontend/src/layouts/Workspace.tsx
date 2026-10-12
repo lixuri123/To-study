@@ -105,7 +105,7 @@ export function Workspace({ user, onLogout, active = true }: {
     void load();
     return () => { mounted.current=false; loadGeneration.current++; };
   }, []);
-  return (<div className={`workspace${view === "timetable" ? " workspace-flame" : ""}${sidebarHidden ? " sidebar-hidden" : ""}${view === "notes" && notesFocused ? " notes-focused" : ""}`}>
+  return (<div className={`workspace${view === "tasks" ? " workspace-tasks" : ""}${view === "timetable" ? " workspace-flame" : ""}${sidebarHidden ? " sidebar-hidden" : ""}${view === "notes" && notesFocused ? " notes-focused" : ""}`}>
     <aside className="sidebar">
       <div className="brand">
         <Leaf />
@@ -175,7 +175,7 @@ export function Workspace({ user, onLogout, active = true }: {
           })}
         </span>
       </header>
-      <section className="page-heading" hidden={view === "timetable" || view === "notes"}>
+      <section className="page-heading" hidden={view === "timetable" || view === "notes" || view === "tasks"}>
         <div>
           <span className="eyebrow">
             {view==="notes"

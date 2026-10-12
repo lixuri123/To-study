@@ -45,3 +45,38 @@
 .task-deadline-popover small { display: block; margin-top: 10px; font-size: 10px; color: var(--muted); }
 .task-deadline-actions { display: flex; gap: 4px; margin-top: 12px; }
 @media (max-width: 720px) { .task-row .task-deadline { margin-left: 31px; } }
+.workspace-tasks .main { padding-inline: clamp(16px, 2vw, 32px); }
+.workspace-tasks .topbar { min-height: 54px; }
+.task-panel { padding-top: 18px; }
+.task-overview { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+.task-overview h2 { margin: 0; color: var(--ink); font: 22px/1.4 "STSong", "SimSun", serif; }
+.task-overview p { margin: 0; color: var(--muted); font-size: 12px; }
+.task-overview p strong { color: #52784a; font-weight: 600; }
+.task-panel .task-add { padding: 6px 8px 6px 12px; gap: 8px; }
+.task-panel .task-add > .input { min-height: 34px; padding-block: 7px; }
+.task-panel .task-add > .button { min-height: 34px; padding: 7px 12px; font-size: 12px; }
+.task-browse-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
+.task-panel .task-filters { display: flex; gap: 4px; margin: 0; }
+.task-panel .task-filters > .button { min-height: 30px; padding: 5px 10px; font-size: 12px; }
+.task-view-switch { display: flex; gap: 3px; padding: 3px; border-radius: 6px; background: #edf1e7; }
+.task-view-switch button { display: flex; align-items: center; gap: 4px; padding: 5px 8px; border-radius: 4px; color: var(--muted); font-size: 11px; }
+.task-view-switch button[aria-pressed="true"] { color: #41633c; background: #fffdf8; }
+.task-view-cards .task-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); align-items: start; gap: 10px; }
+.task-view-cards .task-item { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: #fffdf8; }
+.task-view-cards .task-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 28px 28px; align-items: start; gap: 6px 8px; min-height: 78px; padding: 10px 12px; border-bottom: 0; }
+.task-view-cards .task-row > input[type="checkbox"] { grid-column: 1; grid-row: 1; margin-top: 5px; }
+.task-view-cards .task-content { grid-column: 2 / -1; grid-row: 1; gap: 2px; }
+.task-view-cards .task-title { padding: 2px 0; font-size: 13px; line-height: 1.5; }
+.task-view-cards .task-row .task-deadline { grid-column: 2; grid-row: 2; margin-left: 0; width: 100%; }
+.task-view-cards .task-deadline-popover { left: -26px; right: auto; }
+.task-view-cards .task-row > .button { grid-column: 3; grid-row: 2; min-height: 28px; padding: 5px; }
+.task-view-cards .task-row > .button:last-child, .task-view-cards .task-row > .task-spinner { grid-column: 4; grid-row: 2; }
+.task-view-cards .task-row .task-date { width: 100%; min-height: 28px; padding: 4px 0; }
+.task-view-cards .task-window-editor { margin: 0 10px 10px; padding: 10px; }
+.task-view-cards .task-linked-notes { flex-wrap: wrap; margin: 0 12px 10px 38px; }
+.task-view-list .task-row { gap: 10px; padding: 8px 4px; min-height: 46px; }
+.task-view-list .task-title { padding: 2px 0; font-size: 13px; }
+.task-view-list .task-row > .button { min-height: 30px; padding: 5px; }
+.task-panel .task-empty { grid-column: 1 / -1; min-height: 0; padding: 28px 12px; }
+.task-panel .task-empty h3 { margin: 8px 0 0; font-size: 14px; }
+@media (max-width: 600px) { .task-overview { gap: 8px; flex-wrap: wrap; } .task-view-switch { margin-left: auto; } }
